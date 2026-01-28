@@ -1,5 +1,5 @@
 use crate::player::components::{
-    CameraController, CharacterController, Inventory, PickupDrops, Player,
+    CameraController, CharacterController, Health, Inventory, PickupDrops, Player,
 };
 use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
 use crate::world::resources::VoxelWorld;
@@ -13,6 +13,7 @@ pub fn spawn_player(mut commands: Commands) {
             Player,
             CharacterController::default(),
             Inventory::default(),
+            Health::default(),
             PickupDrops,
             Transform::from_xyz(0.0, spawn_height(), 0.0),
             GlobalTransform::default(),
@@ -381,7 +382,7 @@ pub fn player_interact(
                 if let Ok(mut chunk) = chunk_query.get_mut(chunk_entity) {
                     if left_click {
                         let voxel = chunk.get_voxel(local_voxel_pos);
-                        if voxel != VoxelType::Air {
+                        if voxel != VoxelType::Air && voxel != VoxelType::Bedrock {
                             chunk.set_voxel(local_voxel_pos, VoxelType::Air);
                             commands.entity(chunk_entity).insert(NeedsMeshUpdate);
                             mark_neighbor_chunks(
@@ -449,13 +450,14 @@ fn spawn_drop_item(
     voxel_type: VoxelType,
 ) {
     let material = match voxel_type {
-        VoxelType::Grass => block_assets.grass_material.clone(),
+        VoxelType::Grass => block_assets.grass_side_material.clone(),
         VoxelType::Dirt => block_assets.dirt_material.clone(),
         VoxelType::Stone => block_assets.stone_material.clone(),
         VoxelType::CoalOre => block_assets.coal_ore_material.clone(),
         VoxelType::IronOre => block_assets.iron_ore_material.clone(),
         VoxelType::GoldOre => block_assets.gold_ore_material.clone(),
         VoxelType::DiamondOre => block_assets.diamond_ore_material.clone(),
+        VoxelType::Bedrock => return,
         VoxelType::Air => return,
     };
 

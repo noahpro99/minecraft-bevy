@@ -25,6 +25,7 @@ impl Plugin for PlayerPlugin {
                     player_interact,
                     player_inventory_control,
                     update_inventory_ui,
+                    update_health_ui,
                     handle_command_input,
                     pickup_drops,
                     toggle_settings_menu,

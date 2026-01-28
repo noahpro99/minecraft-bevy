@@ -1,3 +1,4 @@
+use crate::player::components::Health;
 use crate::player::components::{Inventory, InventorySlotIcon};
 use crate::player::settings_menu::{
     FovDecreaseButton, FovIncreaseButton, FovText, RenderDistanceDecreaseButton,
@@ -19,6 +20,9 @@ pub struct InventorySlotText(pub usize);
 
 #[derive(Component)]
 pub struct Crosshair;
+
+#[derive(Component)]
+pub struct HealthText;
 
 #[derive(Resource, Default)]
 pub struct CommandState {
@@ -143,6 +147,29 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ..default()
                 },
                 BackgroundColor(Color::WHITE),
+            ));
+        });
+
+    commands
+        .spawn((
+            Node {
+                width: Val::Px(220.0),
+                height: Val::Px(30.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(12.0),
+                top: Val::Px(12.0),
+                ..default()
+            },
+            HealthText,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Health: 20/20"),
+                TextFont {
+                    font_size: 18.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 0.4, 0.4)),
             ));
         });
 
@@ -669,8 +696,22 @@ pub fn update_inventory_ui(
                 VoxelType::IronOre => icon_assets.iron_ore.clone(),
                 VoxelType::GoldOre => icon_assets.gold_ore.clone(),
                 VoxelType::DiamondOre => icon_assets.diamond_ore.clone(),
+                VoxelType::Bedrock => TRANSPARENT_IMAGE_HANDLE,
                 VoxelType::Air => TRANSPARENT_IMAGE_HANDLE,
             };
         }
     }
+}
+
+pub fn update_health_ui(
+    health_query: Query<&Health>,
+    mut text_query: Query<&mut Text, With<HealthText>>,
+) {
+    let Ok(health) = health_query.single() else {
+        return;
+    };
+    let Ok(mut text) = text_query.single_mut() else {
+        return;
+    };
+    text.0 = format!("Health: {}/{}", health.current, health.max);
 }

@@ -16,6 +16,7 @@ pub enum VoxelType {
     IronOre,
     GoldOre,
     DiamondOre,
+    Bedrock,
 }
 
 #[derive(Component)]
