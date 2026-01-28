@@ -19,6 +19,7 @@ fn main() {
             }),
             ..default()
         }))
+        .init_asset::<AudioSource>()
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
         .insert_resource(TimestepMode::Interpolated {
             dt: 1.0 / 20.0,

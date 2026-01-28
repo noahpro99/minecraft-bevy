@@ -1,6 +1,8 @@
 use crate::player::components::{Health, Hunger, Inventory, InventorySlotIcon};
 use crate::player::settings_menu::{
-    FovDecreaseButton, FovIncreaseButton, FovText, RenderDistanceDecreaseButton,
+    FootstepVolumeDecreaseButton, FootstepVolumeIncreaseButton, FootstepVolumeText,
+    FovDecreaseButton, FovIncreaseButton, FovText, MasterVolumeDecreaseButton,
+    MasterVolumeIncreaseButton, MasterVolumeText, RenderDistanceDecreaseButton,
     RenderDistanceIncreaseButton, RenderDistanceText, ResumeButton, SettingsMenu,
 };
 use crate::world::components::VoxelType;
@@ -329,7 +331,7 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .spawn((
                     Node {
                         width: Val::Px(400.0),
-                        height: Val::Px(400.0),
+                        height: Val::Px(600.0),
                         flex_direction: FlexDirection::Column,
                         align_items: AlignItems::Center,
                         padding: UiRect::all(Val::Px(20.0)),
@@ -502,6 +504,182 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                                             BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
                                             BorderColor::all(Color::WHITE),
                                             RenderDistanceIncreaseButton,
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new("+"),
+                                                TextFont {
+                                                    font_size: 22.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
+                                });
+                        });
+
+                    // Master Volume Section
+                    parent
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(10.0),
+                            ..default()
+                        })
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Text::new("Master Volume"),
+                                TextFont {
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                            ));
+
+                            parent.spawn((
+                                Text::new("50%"),
+                                TextFont {
+                                    font_size: 18.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                                MasterVolumeText,
+                            ));
+
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: Val::Px(12.0),
+                                    ..default()
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(36.0),
+                                                height: Val::Px(36.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                            BorderColor::all(Color::WHITE),
+                                            MasterVolumeDecreaseButton,
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new("-"),
+                                                TextFont {
+                                                    font_size: 22.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(36.0),
+                                                height: Val::Px(36.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                            BorderColor::all(Color::WHITE),
+                                            MasterVolumeIncreaseButton,
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new("+"),
+                                                TextFont {
+                                                    font_size: 22.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
+                                });
+                        });
+
+                    // Footstep Volume Section
+                    parent
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(10.0),
+                            ..default()
+                        })
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Text::new("Footstep Volume"),
+                                TextFont {
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                            ));
+
+                            parent.spawn((
+                                Text::new("30%"),
+                                TextFont {
+                                    font_size: 18.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                                FootstepVolumeText,
+                            ));
+
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: Val::Px(12.0),
+                                    ..default()
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(36.0),
+                                                height: Val::Px(36.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                            BorderColor::all(Color::WHITE),
+                                            FootstepVolumeDecreaseButton,
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new("-"),
+                                                TextFont {
+                                                    font_size: 22.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(36.0),
+                                                height: Val::Px(36.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                            BorderColor::all(Color::WHITE),
+                                            FootstepVolumeIncreaseButton,
                                         ))
                                         .with_children(|parent| {
                                             parent.spawn((

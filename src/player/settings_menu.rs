@@ -5,6 +5,8 @@ use bevy::window::CursorOptions;
 pub struct Settings {
     pub fov: f32,
     pub render_distance: i32,
+    pub master_volume: f32,
+    pub footstep_volume: f32,
 }
 
 impl Default for Settings {
@@ -12,6 +14,8 @@ impl Default for Settings {
         Self {
             fov: 120.0,
             render_distance: 7,
+            master_volume: 0.5,
+            footstep_volume: 0.3,
         }
     }
 }
@@ -39,6 +43,24 @@ pub struct RenderDistanceDecreaseButton;
 
 #[derive(Component)]
 pub struct RenderDistanceIncreaseButton;
+
+#[derive(Component)]
+pub struct MasterVolumeText;
+
+#[derive(Component)]
+pub struct MasterVolumeDecreaseButton;
+
+#[derive(Component)]
+pub struct MasterVolumeIncreaseButton;
+
+#[derive(Component)]
+pub struct FootstepVolumeText;
+
+#[derive(Component)]
+pub struct FootstepVolumeDecreaseButton;
+
+#[derive(Component)]
+pub struct FootstepVolumeIncreaseButton;
 
 pub fn toggle_settings_menu(
     key: Res<ButtonInput<KeyCode>>,
@@ -191,5 +213,97 @@ pub fn handle_render_distance_buttons(
 
     if let Ok(mut text) = text_query.single_mut() {
         text.0 = format!("{} chunks", settings.render_distance);
+    }
+}
+
+pub fn handle_master_volume_buttons(
+    mut settings: ResMut<Settings>,
+    mut text_query: Query<&mut Text, With<MasterVolumeText>>,
+    mut interaction_query: Query<
+        (
+            &Interaction,
+            &mut BackgroundColor,
+            Option<&MasterVolumeDecreaseButton>,
+            Option<&MasterVolumeIncreaseButton>,
+        ),
+        Changed<Interaction>,
+    >,
+) {
+    let mut delta: f32 = 0.0;
+
+    for (interaction, mut color, is_decrease, is_increase) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                if is_decrease.is_some() {
+                    delta -= 0.1;
+                }
+                if is_increase.is_some() {
+                    delta += 0.1;
+                }
+                *color = BackgroundColor(Color::srgb(0.35, 0.35, 0.35));
+            }
+            Interaction::Hovered => {
+                *color = BackgroundColor(Color::srgb(0.3, 0.3, 0.3));
+            }
+            Interaction::None => {
+                *color = BackgroundColor(Color::srgb(0.2, 0.2, 0.2));
+            }
+        }
+    }
+
+    if delta.abs() < f32::EPSILON {
+        return;
+    }
+
+    settings.master_volume = (settings.master_volume + delta).clamp(0.0, 1.0);
+
+    if let Ok(mut text) = text_query.single_mut() {
+        text.0 = format!("{:.0}%", settings.master_volume * 100.0);
+    }
+}
+
+pub fn handle_footstep_volume_buttons(
+    mut settings: ResMut<Settings>,
+    mut text_query: Query<&mut Text, With<FootstepVolumeText>>,
+    mut interaction_query: Query<
+        (
+            &Interaction,
+            &mut BackgroundColor,
+            Option<&FootstepVolumeDecreaseButton>,
+            Option<&FootstepVolumeIncreaseButton>,
+        ),
+        Changed<Interaction>,
+    >,
+) {
+    let mut delta: f32 = 0.0;
+
+    for (interaction, mut color, is_decrease, is_increase) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                if is_decrease.is_some() {
+                    delta -= 0.1;
+                }
+                if is_increase.is_some() {
+                    delta += 0.1;
+                }
+                *color = BackgroundColor(Color::srgb(0.35, 0.35, 0.35));
+            }
+            Interaction::Hovered => {
+                *color = BackgroundColor(Color::srgb(0.3, 0.3, 0.3));
+            }
+            Interaction::None => {
+                *color = BackgroundColor(Color::srgb(0.2, 0.2, 0.2));
+            }
+        }
+    }
+
+    if delta.abs() < f32::EPSILON {
+        return;
+    }
+
+    settings.footstep_volume = (settings.footstep_volume + delta).clamp(0.0, 1.0);
+
+    if let Ok(mut text) = text_query.single_mut() {
+        text.0 = format!("{:.0}%", settings.footstep_volume * 100.0);
     }
 }

@@ -7,10 +7,10 @@ use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;
 
 use crate::player::settings_menu::Settings;
-use crate::world::components::{
-    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
-};
 use crate::world::VoxelWorld;
+use crate::world::components::{
+    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+};
 
 #[derive(Component)]
 pub struct Block;

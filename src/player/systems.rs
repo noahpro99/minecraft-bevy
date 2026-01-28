@@ -1,9 +1,13 @@
 use crate::player::components::{
-    CameraController, CharacterController, Health, Hunger, Inventory, PickupDrops, Player,
+    CameraController, CharacterController, FootstepTimer, Health, Hunger, Inventory, PickupDrops,
+    Player,
 };
+use crate::player::resources::SoundAssets;
+use crate::player::settings_menu::Settings;
 use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
 use crate::world::resources::VoxelWorld;
 use crate::world::systems::{BlockAssets, InitialChunkMeshing};
+use bevy::audio::{AudioPlayer, AudioSource, PlaybackSettings, Volume};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
@@ -26,6 +30,7 @@ pub fn spawn_player(mut commands: Commands) {
             Ccd::enabled(),
             Velocity::default(),
         ))
+        .insert(FootstepTimer::default())
         .insert(TransformInterpolation::default())
         .with_children(|parent| {
             parent.spawn((
@@ -57,7 +62,7 @@ fn spawn_height() -> f32 {
 }
 
 pub fn spawn_player_when_ready(
-    mut commands: Commands,
+    commands: Commands,
     meshing: Res<InitialChunkMeshing>,
     players: Query<Entity, With<Player>>,
     voxel_world: Res<VoxelWorld>,
@@ -402,6 +407,8 @@ pub fn player_interact(
     mut chunk_query: Query<&mut Chunk>,
     voxel_world: Res<VoxelWorld>,
     block_assets: Res<BlockAssets>,
+    sound_assets: Res<SoundAssets>,
+    settings: Res<Settings>,
     mut inventory_query: Query<&mut Inventory, With<Player>>,
     player_query: Query<(Entity, &GlobalTransform), With<Player>>,
     settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
@@ -476,6 +483,9 @@ pub fn player_interact(
                                 local_voxel_pos,
                             );
                             spawn_drop_item(&mut commands, &block_assets, world_voxel_pos, voxel);
+                            if let Some(sound) = block_break_sound(voxel, &sound_assets) {
+                                play_sound(&mut commands, sound, settings.master_volume);
+                            }
                         }
                     } else if right_click {
                         if let Ok(mut inventory) = inventory_query.single_mut() {
@@ -509,6 +519,11 @@ pub fn player_interact(
                                     &voxel_world,
                                     chunk_pos,
                                     local_voxel_pos,
+                                );
+                                play_sound(
+                                    &mut commands,
+                                    sound_assets.place_block.clone(),
+                                    settings.master_volume,
                                 );
 
                                 let slot = &mut inventory.slots[selected_slot];
@@ -635,6 +650,8 @@ pub fn pickup_drops(
     mut commands: Commands,
     mut inventories: Query<(&GlobalTransform, &mut Inventory), With<PickupDrops>>,
     drops: Query<(Entity, &Transform, &DropItem)>,
+    sound_assets: Res<SoundAssets>,
+    settings: Res<Settings>,
 ) {
     let pickup_radius = 1.2;
 
@@ -649,6 +666,11 @@ pub fn pickup_drops(
 
             if add_to_inventory(&mut inventory, drop.voxel_type) {
                 commands.entity(drop_entity).despawn();
+                play_sound(
+                    &mut commands,
+                    sound_assets.pickup_item.clone(),
+                    settings.master_volume,
+                );
                 break;
             }
         }
@@ -674,6 +696,109 @@ fn add_to_inventory(inventory: &mut Inventory, voxel_type: VoxelType) -> bool {
     }
 
     false
+}
+
+pub fn update_footsteps(
+    time: Res<Time>,
+    voxel_world: Res<VoxelWorld>,
+    chunk_query: Query<&Chunk>,
+    mut player_query: Query<
+        (
+            &Transform,
+            &mut FootstepTimer,
+            &Velocity,
+            &CharacterController,
+        ),
+        With<Player>,
+    >,
+    sound_assets: Res<SoundAssets>,
+    settings: Res<Settings>,
+    mut commands: Commands,
+    settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
+) {
+    if let Ok(visibility) = settings_menu.single() {
+        if *visibility != Visibility::Hidden {
+            return;
+        }
+    }
+
+    let Ok((transform, mut footstep_timer, velocity, controller)) = player_query.single_mut()
+    else {
+        return;
+    };
+
+    if !controller.is_grounded {
+        return;
+    }
+
+    footstep_timer.timer.tick(time.delta());
+
+    let moving = velocity.linvel.xz().length_squared() > 0.1;
+    if !moving {
+        return;
+    }
+
+    if !footstep_timer.timer.is_finished() {
+        return;
+    }
+
+    let voxel_pos = VoxelWorld::world_to_voxel_pos(transform.translation);
+    let chunk_pos = VoxelWorld::world_to_chunk_pos(transform.translation);
+    let local_pos = VoxelWorld::voxel_to_local_pos(voxel_pos);
+
+    let Some(&chunk_entity) = voxel_world.chunks.get(&chunk_pos) else {
+        return;
+    };
+    let Ok(chunk) = chunk_query.get(chunk_entity) else {
+        return;
+    };
+
+    let voxel = chunk.get_voxel(local_pos);
+
+    let step_sound = match voxel {
+        VoxelType::Grass => Some(sound_assets.step_grass.clone()),
+        VoxelType::Dirt => Some(sound_assets.step_dirt.clone()),
+        VoxelType::Stone
+        | VoxelType::CoalOre
+        | VoxelType::IronOre
+        | VoxelType::GoldOre
+        | VoxelType::DiamondOre
+        | VoxelType::Bedrock => Some(sound_assets.step_stone.clone()),
+        _ => Some(sound_assets.step_stone.clone()),
+    };
+
+    if let Some(sound) = step_sound {
+        play_sound(
+            &mut commands,
+            sound,
+            settings.master_volume * settings.footstep_volume,
+        );
+        footstep_timer.timer.reset();
+    }
+}
+
+fn play_sound(commands: &mut Commands, sound: Handle<AudioSource>, volume: f32) {
+    commands.spawn((
+        AudioPlayer::new(sound),
+        PlaybackSettings::DESPAWN
+            .with_spatial(false)
+            .with_volume(Volume::Linear(volume)),
+        Transform::default(),
+        GlobalTransform::default(),
+    ));
+}
+
+fn block_break_sound(voxel: VoxelType, sound_assets: &SoundAssets) -> Option<Handle<AudioSource>> {
+    match voxel {
+        VoxelType::Grass | VoxelType::Dirt => Some(sound_assets.break_grass.clone()),
+        VoxelType::Stone
+        | VoxelType::CoalOre
+        | VoxelType::IronOre
+        | VoxelType::GoldOre
+        | VoxelType::DiamondOre
+        | VoxelType::Bedrock => Some(sound_assets.break_stone.clone()),
+        VoxelType::Air => None,
+    }
 }
 
 fn resolve_drop_overlap(
