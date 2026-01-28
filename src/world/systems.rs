@@ -24,6 +24,9 @@ pub struct BlockAssets {
     pub glowstone_material: Handle<StandardMaterial>,
 }
 
+#[derive(Resource, Default)]
+pub struct InitialChunkMeshing(pub bool);
+
 const MAX_CHUNKS_PER_FRAME: usize = 4;
 const MAX_MESH_UPDATES_PER_FRAME: usize = 2;
 
@@ -32,6 +35,7 @@ pub fn spawn_chunks_around_player(
     mut voxel_world: ResMut<VoxelWorld>,
     player_query: Query<&Transform, With<crate::player::components::Player>>,
     settings: Res<Settings>,
+    initial_meshing: Res<InitialChunkMeshing>,
 ) {
     let player_transform = match player_query.iter().next() {
         Some(t) => t,
@@ -45,6 +49,10 @@ pub fn spawn_chunks_around_player(
     let base_height = 14.0;
     let amplitude = 8.0;
     let frequency = 0.04;
+
+    if initial_meshing.0 {
+        return;
+    }
 
     let mut spawned = 0;
     for y in -vertical_distance..=vertical_distance {
@@ -148,6 +156,7 @@ pub fn update_chunk_mesh(
     children_query: Query<&Children>,
     voxel_world: Res<VoxelWorld>,
     chunk_lookup: Query<&Chunk>,
+    mut initial_meshing: ResMut<InitialChunkMeshing>,
     query: Query<
         (Entity, &Chunk, &ChunkPosition, Option<&Mesh3d>),
         (
@@ -156,9 +165,14 @@ pub fn update_chunk_mesh(
         ),
     >,
 ) {
+    let limit = if initial_meshing.0 {
+        usize::MAX
+    } else {
+        MAX_MESH_UPDATES_PER_FRAME
+    };
     let mut processed = 0;
     for (entity, chunk, chunk_pos, existing_mesh) in query.iter() {
-        if processed >= MAX_MESH_UPDATES_PER_FRAME {
+        if processed >= limit {
             break;
         }
         processed += 1;
@@ -447,6 +461,10 @@ pub fn update_chunk_mesh(
 
         commands.entity(entity).remove::<NeedsMeshUpdate>();
     }
+
+    if initial_meshing.0 && query.is_empty() {
+        initial_meshing.0 = false;
+    }
 }
 
 pub fn setup_world(
@@ -457,6 +475,7 @@ pub fn setup_world(
     mut voxel_world: ResMut<VoxelWorld>,
     settings: Res<Settings>,
 ) {
+    commands.insert_resource(InitialChunkMeshing(true));
     let dirt_texture = asset_server.load_with_settings(
         "textures/dirt.png",
         |settings: &mut ImageLoaderSettings| {
