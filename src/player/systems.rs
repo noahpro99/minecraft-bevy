@@ -3,7 +3,7 @@ use crate::player::components::{
 };
 use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType};
 use crate::world::resources::VoxelWorld;
-use crate::world::systems::BlockAssets;
+use crate::world::systems::{BlockAssets, InitialChunkMeshing};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
@@ -14,7 +14,7 @@ pub fn spawn_player(mut commands: Commands) {
             CharacterController::default(),
             Inventory::default(),
             PickupDrops,
-            Transform::from_xyz(0.0, 30.0, 0.0),
+            Transform::from_xyz(0.0, spawn_height(), 0.0),
             GlobalTransform::default(),
             Visibility::Visible,
             RigidBody::Dynamic,
@@ -40,6 +40,33 @@ pub fn spawn_player(mut commands: Commands) {
                 Visibility::Visible,
             ));
         });
+}
+
+fn spawn_height() -> f32 {
+    let base_height = 14.0;
+    let amplitude = 8.0;
+    let frequency = 0.04;
+    let wave = (0.0_f32 * frequency).sin()
+        + (0.0_f32 * frequency).cos()
+        + (0.0_f32 * frequency * 0.5).sin() * 0.5
+        + (0.0_f32 * frequency * 0.5).cos() * 0.5;
+    let height = (base_height + wave * amplitude * 0.5).round();
+    height + 3.0
+}
+
+pub fn spawn_player_when_ready(
+    mut commands: Commands,
+    meshing: Res<InitialChunkMeshing>,
+    players: Query<Entity, With<Player>>,
+) {
+    if meshing.0 {
+        return;
+    }
+    if !players.is_empty() {
+        return;
+    }
+
+    spawn_player(commands);
 }
 
 pub fn player_look(

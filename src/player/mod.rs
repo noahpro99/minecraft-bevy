@@ -15,17 +15,12 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Settings>()
-            .add_systems(
-                Startup,
-                (
-                    spawn_player.after(crate::world::systems::setup_world),
-                    setup_ui,
-                ),
-            )
+            .add_systems(Startup, setup_ui)
             .init_resource::<CommandState>()
             .add_systems(
                 Update,
                 (
+                    spawn_player_when_ready,
                     player_look,
                     player_interact,
                     player_inventory_control,

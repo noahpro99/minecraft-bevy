@@ -41,6 +41,8 @@
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" ];
             })
+            rust-analyzer
+            clippy
           ];
           inherit buildInputs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;

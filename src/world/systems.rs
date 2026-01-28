@@ -27,8 +27,10 @@ pub struct BlockAssets {
 #[derive(Resource, Default)]
 pub struct InitialChunkMeshing(pub bool);
 
-const MAX_CHUNKS_PER_FRAME: usize = 4;
-const MAX_MESH_UPDATES_PER_FRAME: usize = 2;
+const MAX_CHUNKS_PER_FRAME: usize = usize::MAX;
+const MAX_MESH_UPDATES_PER_FRAME: usize = usize::MAX;
+const WORLD_MIN_Y: i32 = -32;
+const WORLD_MAX_Y: i32 = 96;
 
 pub fn spawn_chunks_around_player(
     mut commands: Commands,
@@ -44,7 +46,7 @@ pub fn spawn_chunks_around_player(
 
     let player_chunk_pos = VoxelWorld::world_to_chunk_pos(player_transform.translation);
     let view_distance = settings.render_distance;
-    let vertical_distance = 2;
+    let (min_chunk_y, max_chunk_y) = world_chunk_y_range();
 
     let base_height = 14.0;
     let amplitude = 8.0;
@@ -55,11 +57,10 @@ pub fn spawn_chunks_around_player(
     }
 
     let mut spawned = 0;
-    for y in -vertical_distance..=vertical_distance {
+    for y in min_chunk_y..=max_chunk_y {
         for x in -view_distance..=view_distance {
             for z in -view_distance..=view_distance {
-                let chunk_pos = player_chunk_pos + IVec3::new(x, y, z);
-                let chunk_key = chunk_pos;
+                let chunk_key = IVec3::new(player_chunk_pos.x + x, y, player_chunk_pos.z + z);
 
                 if !voxel_world.chunks.contains_key(&chunk_key) {
                     let chunk_data = generate_chunk(chunk_key, base_height, amplitude, frequency);
@@ -115,15 +116,17 @@ pub fn despawn_far_chunks(
 
     let player_chunk_pos = VoxelWorld::world_to_chunk_pos(player_transform.translation);
     let view_distance = settings.render_distance;
-    let vertical_distance = 2;
+    let (min_chunk_y, max_chunk_y) = world_chunk_y_range();
 
     let mut to_remove = Vec::new();
 
     for (chunk_pos, entity) in voxel_world.chunks.iter() {
-        let delta = *chunk_pos - player_chunk_pos;
-        if delta.x.abs() > view_distance
-            || delta.z.abs() > view_distance
-            || delta.y.abs() > vertical_distance
+        let delta_x = chunk_pos.x - player_chunk_pos.x;
+        let delta_z = chunk_pos.z - player_chunk_pos.z;
+        if delta_x.abs() > view_distance
+            || delta_z.abs() > view_distance
+            || chunk_pos.y < min_chunk_y
+            || chunk_pos.y > max_chunk_y
         {
             commands.entity(*entity).insert(DespawnChunk);
             to_remove.push(*chunk_pos);
@@ -542,12 +545,12 @@ pub fn setup_world(
     ));
 
     let view_distance = settings.render_distance;
-    let vertical_distance = 2;
+    let (min_chunk_y, max_chunk_y) = world_chunk_y_range();
     let base_height = 14.0;
     let amplitude = 8.0;
     let frequency = 0.04;
 
-    for y in -vertical_distance..=vertical_distance {
+    for y in min_chunk_y..=max_chunk_y {
         for x in -view_distance..=view_distance {
             for z in -view_distance..=view_distance {
                 let chunk_key = IVec3::new(x, y, z);
@@ -583,12 +586,27 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
                 + (world_vx as f32 * frequency * 0.5).sin() * 0.5
                 + (world_vz as f32 * frequency * 0.5).cos() * 0.5;
             let mut height = (base_height + wave * amplitude * 0.5).round() as i32;
-            if height < 1 {
-                height = 1;
+            if height < WORLD_MIN_Y + 1 {
+                height = WORLD_MIN_Y + 1;
+            }
+            if height > WORLD_MAX_Y - 1 {
+                height = WORLD_MAX_Y - 1;
             }
 
             for vy in 0..CHUNK_SIZE {
                 let world_vy = chunk_world_y + vy as i32;
+                if world_vy > WORLD_MAX_Y {
+                    continue;
+                }
+
+                if world_vy <= WORLD_MIN_Y {
+                    chunk_data.set_voxel(
+                        IVec3::new(vx as i32, vy as i32, vz as i32),
+                        VoxelType::Stone,
+                    );
+                    continue;
+                }
+
                 if world_vy <= height {
                     let voxel = if world_vy == height {
                         VoxelType::Grass
@@ -610,4 +628,10 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
 fn glowstone_at(x: i32, y: i32, z: i32) -> bool {
     let hash = (x as i64 * 734287 + y as i64 * 912931 + z as i64 * 1237).abs();
     (hash % 100) < 3
+}
+
+fn world_chunk_y_range() -> (i32, i32) {
+    let min = (WORLD_MIN_Y as f32 / CHUNK_SIZE as f32).floor() as i32;
+    let max = (WORLD_MAX_Y as f32 / CHUNK_SIZE as f32).floor() as i32;
+    (min, max)
 }
