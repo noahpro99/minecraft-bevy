@@ -21,7 +21,10 @@ pub struct BlockAssets {
     pub grass_material: Handle<StandardMaterial>,
     pub dirt_material: Handle<StandardMaterial>,
     pub stone_material: Handle<StandardMaterial>,
-    pub glowstone_material: Handle<StandardMaterial>,
+    pub coal_ore_material: Handle<StandardMaterial>,
+    pub iron_ore_material: Handle<StandardMaterial>,
+    pub gold_ore_material: Handle<StandardMaterial>,
+    pub diamond_ore_material: Handle<StandardMaterial>,
 }
 
 #[derive(Resource, Default)]
@@ -229,7 +232,10 @@ pub fn update_chunk_mesh(
         let mut grass = MeshBuffers::default();
         let mut dirt = MeshBuffers::default();
         let mut stone = MeshBuffers::default();
-        let mut glowstone = MeshBuffers::default();
+        let mut coal_ore = MeshBuffers::default();
+        let mut iron_ore = MeshBuffers::default();
+        let mut gold_ore = MeshBuffers::default();
+        let mut diamond_ore = MeshBuffers::default();
 
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
@@ -244,7 +250,10 @@ pub fn update_chunk_mesh(
                         VoxelType::Grass => Some(&mut grass),
                         VoxelType::Dirt => Some(&mut dirt),
                         VoxelType::Stone => Some(&mut stone),
-                        VoxelType::Glowstone => Some(&mut glowstone),
+                        VoxelType::CoalOre => Some(&mut coal_ore),
+                        VoxelType::IronOre => Some(&mut iron_ore),
+                        VoxelType::GoldOre => Some(&mut gold_ore),
+                        VoxelType::DiamondOre => Some(&mut diamond_ore),
                         VoxelType::Air => None,
                     };
 
@@ -413,10 +422,25 @@ pub fn update_chunk_mesh(
         } else {
             Some(stone.into_mesh())
         };
-        let glowstone_mesh = if glowstone.is_empty() {
+        let coal_ore_mesh = if coal_ore.is_empty() {
             None
         } else {
-            Some(glowstone.into_mesh())
+            Some(coal_ore.into_mesh())
+        };
+        let iron_ore_mesh = if iron_ore.is_empty() {
+            None
+        } else {
+            Some(iron_ore.into_mesh())
+        };
+        let gold_ore_mesh = if gold_ore.is_empty() {
+            None
+        } else {
+            Some(gold_ore.into_mesh())
+        };
+        let diamond_ore_mesh = if diamond_ore.is_empty() {
+            None
+        } else {
+            Some(diamond_ore.into_mesh())
         };
 
         commands.entity(entity).with_children(|parent| {
@@ -450,11 +474,41 @@ pub fn update_chunk_mesh(
                     Visibility::Visible,
                 ));
             }
-            if let Some(mesh) = glowstone_mesh {
+            if let Some(mesh) = coal_ore_mesh {
                 let handle = meshes.add(mesh);
                 parent.spawn((
                     Mesh3d(handle),
-                    MeshMaterial3d(block_assets.glowstone_material.clone()),
+                    MeshMaterial3d(block_assets.coal_ore_material.clone()),
+                    Transform::default(),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                ));
+            }
+            if let Some(mesh) = iron_ore_mesh {
+                let handle = meshes.add(mesh);
+                parent.spawn((
+                    Mesh3d(handle),
+                    MeshMaterial3d(block_assets.iron_ore_material.clone()),
+                    Transform::default(),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                ));
+            }
+            if let Some(mesh) = gold_ore_mesh {
+                let handle = meshes.add(mesh);
+                parent.spawn((
+                    Mesh3d(handle),
+                    MeshMaterial3d(block_assets.gold_ore_material.clone()),
+                    Transform::default(),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                ));
+            }
+            if let Some(mesh) = diamond_ore_mesh {
+                let handle = meshes.add(mesh);
+                parent.spawn((
+                    Mesh3d(handle),
+                    MeshMaterial3d(block_assets.diamond_ore_material.clone()),
                     Transform::default(),
                     GlobalTransform::default(),
                     Visibility::Visible,
@@ -486,7 +540,7 @@ pub fn setup_world(
         },
     );
     let grass_texture = asset_server.load_with_settings(
-        "textures/grass_block_top.png",
+        "textures/grass_block_side.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
@@ -497,8 +551,26 @@ pub fn setup_world(
             settings.sampler = ImageSampler::nearest();
         },
     );
-    let glowstone_texture = asset_server.load_with_settings(
-        "textures/glowstone.png",
+    let coal_ore_texture = asset_server.load_with_settings(
+        "textures/coal_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let iron_ore_texture = asset_server.load_with_settings(
+        "textures/iron_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let gold_ore_texture = asset_server.load_with_settings(
+        "textures/gold_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let diamond_ore_texture = asset_server.load_with_settings(
+        "textures/diamond_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
@@ -519,10 +591,24 @@ pub fn setup_world(
         base_color: Color::WHITE,
         ..default()
     });
-    let glowstone_material = materials.add(StandardMaterial {
-        base_color_texture: Some(glowstone_texture),
+    let coal_ore_material = materials.add(StandardMaterial {
+        base_color_texture: Some(coal_ore_texture),
         base_color: Color::WHITE,
-        emissive: Color::srgb(4.0, 4.0, 3.0).into(),
+        ..default()
+    });
+    let iron_ore_material = materials.add(StandardMaterial {
+        base_color_texture: Some(iron_ore_texture),
+        base_color: Color::WHITE,
+        ..default()
+    });
+    let gold_ore_material = materials.add(StandardMaterial {
+        base_color_texture: Some(gold_ore_texture),
+        base_color: Color::WHITE,
+        ..default()
+    });
+    let diamond_ore_material = materials.add(StandardMaterial {
+        base_color_texture: Some(diamond_ore_texture),
+        base_color: Color::WHITE,
         ..default()
     });
 
@@ -531,13 +617,16 @@ pub fn setup_world(
         grass_material,
         dirt_material,
         stone_material,
-        glowstone_material,
+        coal_ore_material,
+        iron_ore_material,
+        gold_ore_material,
+        diamond_ore_material,
     });
 
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            illuminance: 30000.0,
+            illuminance: 22000.0,
             ..default()
         },
         Transform::from_xyz(80.0, 120.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -610,10 +699,8 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
                 if world_vy <= height {
                     let voxel = if world_vy == height {
                         VoxelType::Grass
-                    } else if glowstone_at(world_vx, world_vy, world_vz) {
-                        VoxelType::Glowstone
                     } else {
-                        VoxelType::Stone
+                        select_stone_variant(world_vx, world_vy, world_vz)
                     };
 
                     chunk_data.set_voxel(IVec3::new(vx as i32, vy as i32, vz as i32), voxel);
@@ -625,9 +712,21 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
     chunk_data
 }
 
-fn glowstone_at(x: i32, y: i32, z: i32) -> bool {
+fn select_stone_variant(x: i32, y: i32, z: i32) -> VoxelType {
     let hash = (x as i64 * 734287 + y as i64 * 912931 + z as i64 * 1237).abs();
-    (hash % 100) < 3
+    let roll = (hash % 100) as i32;
+
+    if y < 10 && roll < 2 {
+        VoxelType::DiamondOre
+    } else if y < 20 && roll < 4 {
+        VoxelType::GoldOre
+    } else if y < 40 && roll < 7 {
+        VoxelType::IronOre
+    } else if roll < 12 {
+        VoxelType::CoalOre
+    } else {
+        VoxelType::Stone
+    }
 }
 
 fn world_chunk_y_range() -> (i32, i32) {

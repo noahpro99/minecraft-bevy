@@ -452,7 +452,10 @@ fn spawn_drop_item(
         VoxelType::Grass => block_assets.grass_material.clone(),
         VoxelType::Dirt => block_assets.dirt_material.clone(),
         VoxelType::Stone => block_assets.stone_material.clone(),
-        VoxelType::Glowstone => block_assets.glowstone_material.clone(),
+        VoxelType::CoalOre => block_assets.coal_ore_material.clone(),
+        VoxelType::IronOre => block_assets.iron_ore_material.clone(),
+        VoxelType::GoldOre => block_assets.gold_ore_material.clone(),
+        VoxelType::DiamondOre => block_assets.diamond_ore_material.clone(),
         VoxelType::Air => return,
     };
 

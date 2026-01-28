@@ -12,7 +12,10 @@ pub enum VoxelType {
     Grass,
     Dirt,
     Stone,
-    Glowstone,
+    CoalOre,
+    IronOre,
+    GoldOre,
+    DiamondOre,
 }
 
 #[derive(Component)]

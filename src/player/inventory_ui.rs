@@ -44,7 +44,10 @@ pub struct InventoryIconAssets {
     pub grass: Handle<Image>,
     pub dirt: Handle<Image>,
     pub stone: Handle<Image>,
-    pub glowstone: Handle<Image>,
+    pub coal_ore: Handle<Image>,
+    pub iron_ore: Handle<Image>,
+    pub gold_ore: Handle<Image>,
+    pub diamond_ore: Handle<Image>,
 }
 
 pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -66,8 +69,26 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
             settings.sampler = ImageSampler::nearest();
         },
     );
-    let glowstone_icon = asset_server.load_with_settings(
-        "textures/glowstone.png",
+    let coal_ore_icon = asset_server.load_with_settings(
+        "textures/coal_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let iron_ore_icon = asset_server.load_with_settings(
+        "textures/iron_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let gold_ore_icon = asset_server.load_with_settings(
+        "textures/gold_ore.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let diamond_ore_icon = asset_server.load_with_settings(
+        "textures/diamond_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
@@ -76,7 +97,10 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         grass: grass_icon,
         dirt: dirt_icon,
         stone: stone_icon,
-        glowstone: glowstone_icon,
+        coal_ore: coal_ore_icon,
+        iron_ore: iron_ore_icon,
+        gold_ore: gold_ore_icon,
+        diamond_ore: diamond_ore_icon,
     });
 
     // Crosshair
@@ -641,7 +665,10 @@ pub fn update_inventory_ui(
                 VoxelType::Grass => icon_assets.grass.clone(),
                 VoxelType::Dirt => icon_assets.dirt.clone(),
                 VoxelType::Stone => icon_assets.stone.clone(),
-                VoxelType::Glowstone => icon_assets.glowstone.clone(),
+                VoxelType::CoalOre => icon_assets.coal_ore.clone(),
+                VoxelType::IronOre => icon_assets.iron_ore.clone(),
+                VoxelType::GoldOre => icon_assets.gold_ore.clone(),
+                VoxelType::DiamondOre => icon_assets.diamond_ore.clone(),
                 VoxelType::Air => TRANSPARENT_IMAGE_HANDLE,
             };
         }
