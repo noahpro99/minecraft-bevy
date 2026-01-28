@@ -5,7 +5,7 @@ use crate::player::settings_menu::{
     MasterVolumeIncreaseButton, MasterVolumeText, RenderDistanceDecreaseButton,
     RenderDistanceIncreaseButton, RenderDistanceText, ResumeButton, SettingsMenu,
 };
-use crate::world::components::VoxelType;
+use crate::world::components::{ItemType, VoxelType};
 use bevy::image::{ImageLoaderSettings, ImageSampler, TRANSPARENT_IMAGE_HANDLE};
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
@@ -56,6 +56,7 @@ pub struct InventoryIconAssets {
     pub iron_ore: Handle<Image>,
     pub gold_ore: Handle<Image>,
     pub diamond_ore: Handle<Image>,
+    pub wheat: Handle<Image>,
 }
 
 pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -101,6 +102,12 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
             settings.sampler = ImageSampler::nearest();
         },
     );
+    let wheat_icon = asset_server.load_with_settings(
+        "textures/item/wheat.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
     commands.insert_resource(InventoryIconAssets {
         grass: grass_icon,
         dirt: dirt_icon,
@@ -109,6 +116,7 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         iron_ore: iron_ore_icon,
         gold_ore: gold_ore_icon,
         diamond_ore: diamond_ore_icon,
+        wheat: wheat_icon,
     });
 
     // Crosshair
@@ -887,16 +895,16 @@ pub fn update_inventory_ui(
 
         for (slot_icon, mut image) in icon_query.iter_mut() {
             let slot = &inventory.slots[slot_icon.0];
-            image.image = match slot.voxel_type {
-                VoxelType::Grass => icon_assets.grass.clone(),
-                VoxelType::Dirt => icon_assets.dirt.clone(),
-                VoxelType::Stone => icon_assets.stone.clone(),
-                VoxelType::CoalOre => icon_assets.coal_ore.clone(),
-                VoxelType::IronOre => icon_assets.iron_ore.clone(),
-                VoxelType::GoldOre => icon_assets.gold_ore.clone(),
-                VoxelType::DiamondOre => icon_assets.diamond_ore.clone(),
-                VoxelType::Bedrock => TRANSPARENT_IMAGE_HANDLE,
-                VoxelType::Air => TRANSPARENT_IMAGE_HANDLE,
+            image.image = match slot.item_type {
+                ItemType::GrassBlock => icon_assets.grass.clone(),
+                ItemType::Dirt => icon_assets.dirt.clone(),
+                ItemType::Stone => icon_assets.stone.clone(),
+                ItemType::CoalOre => icon_assets.coal_ore.clone(),
+                ItemType::IronOre => icon_assets.iron_ore.clone(),
+                ItemType::GoldOre => icon_assets.gold_ore.clone(),
+                ItemType::DiamondOre => icon_assets.diamond_ore.clone(),
+                ItemType::Wheat => icon_assets.wheat.clone(),
+                ItemType::None => TRANSPARENT_IMAGE_HANDLE,
             };
         }
     }

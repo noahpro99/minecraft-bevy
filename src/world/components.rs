@@ -17,6 +17,7 @@ pub enum VoxelType {
     GoldOre,
     DiamondOre,
     Bedrock,
+    TallGrass,
 }
 
 #[derive(Component)]
@@ -30,9 +31,23 @@ pub struct ChunkPosition(pub IVec3);
 #[derive(Component)]
 pub struct SunLight;
 
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum ItemType {
+    #[default]
+    None,
+    GrassBlock,
+    Dirt,
+    Stone,
+    CoalOre,
+    IronOre,
+    GoldOre,
+    DiamondOre,
+    Wheat,
+}
+
 #[derive(Component)]
 pub struct DropItem {
-    pub voxel_type: VoxelType,
+    pub item_type: ItemType,
     pub velocity: Vec3,
 }
 

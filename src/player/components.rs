@@ -1,4 +1,4 @@
-use crate::world::components::VoxelType;
+use crate::world::components::{ItemType, VoxelType};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -64,7 +64,7 @@ impl Default for CharacterController {
 
 #[derive(Clone, Copy, Debug)]
 pub struct InventorySlot {
-    pub voxel_type: VoxelType,
+    pub item_type: ItemType,
     pub count: u32,
 }
 
@@ -80,7 +80,7 @@ pub struct InventorySlotIcon(pub usize);
 impl Default for Inventory {
     fn default() -> Self {
         let slots = [InventorySlot {
-            voxel_type: VoxelType::Air,
+            item_type: ItemType::None,
             count: 0,
         }; 10];
         Self {

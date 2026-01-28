@@ -19,6 +19,8 @@ pub enum MobType {
 pub struct MobState {
     pub state: MobBehavior,
     pub timer: f32,
+    pub target_entity: Option<Entity>,
+    pub contact_timer: f32, // Time spent close to target
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -26,6 +28,8 @@ pub enum MobBehavior {
     Idle,
     Wandering,
     Attacking,
+    Love,
+    Parent, // Just gave birth
 }
 
 impl Default for MobState {
@@ -33,6 +37,8 @@ impl Default for MobState {
         Self {
             state: MobBehavior::Idle,
             timer: 0.0,
+            target_entity: None,
+            contact_timer: 0.0,
         }
     }
 }

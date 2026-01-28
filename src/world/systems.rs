@@ -7,10 +7,10 @@ use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;
 
 use crate::player::settings_menu::Settings;
-use crate::world::VoxelWorld;
 use crate::world::components::{
-    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
 };
+use crate::world::VoxelWorld;
 
 #[derive(Component)]
 pub struct Block;
@@ -27,6 +27,8 @@ pub struct BlockAssets {
     pub gold_ore_material: Handle<StandardMaterial>,
     pub diamond_ore_material: Handle<StandardMaterial>,
     pub bedrock_material: Handle<StandardMaterial>,
+    pub tall_grass_material: Handle<StandardMaterial>,
+    pub wheat_material: Handle<StandardMaterial>,
 }
 
 #[derive(Resource, Default)]
@@ -240,6 +242,8 @@ pub fn update_chunk_mesh(
         let mut gold_ore = MeshBuffers::default();
         let mut diamond_ore = MeshBuffers::default();
         let mut bedrock = MeshBuffers::default();
+        let mut tall_grass = MeshBuffers::default();
+        let mut tall_grass_collision = MeshBuffers::default();
 
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
@@ -247,6 +251,122 @@ pub fn update_chunk_mesh(
                     let pos = IVec3::new(x as i32, y as i32, z as i32);
                     let voxel = chunk.get_voxel(pos);
                     if voxel == VoxelType::Air {
+                        continue;
+                    }
+
+                    if voxel == VoxelType::TallGrass {
+                        let visual_faces = [
+                            [
+                                [pos.x as f32, pos.y as f32, pos.z as f32],
+                                [pos.x as f32 + 1.0, pos.y as f32, pos.z as f32 + 1.0],
+                                [pos.x as f32 + 1.0, pos.y as f32 + 1.0, pos.z as f32 + 1.0],
+                                [pos.x as f32, pos.y as f32 + 1.0, pos.z as f32],
+                            ],
+                            [
+                                [pos.x as f32 + 1.0, pos.y as f32, pos.z as f32 + 1.0],
+                                [pos.x as f32, pos.y as f32, pos.z as f32],
+                                [pos.x as f32, pos.y as f32 + 1.0, pos.z as f32],
+                                [pos.x as f32 + 1.0, pos.y as f32 + 1.0, pos.z as f32 + 1.0],
+                            ],
+                            [
+                                [pos.x as f32 + 1.0, pos.y as f32, pos.z as f32],
+                                [pos.x as f32, pos.y as f32, pos.z as f32 + 1.0],
+                                [pos.x as f32, pos.y as f32 + 1.0, pos.z as f32 + 1.0],
+                                [pos.x as f32 + 1.0, pos.y as f32 + 1.0, pos.z as f32],
+                            ],
+                            [
+                                [pos.x as f32, pos.y as f32, pos.z as f32 + 1.0],
+                                [pos.x as f32 + 1.0, pos.y as f32, pos.z as f32],
+                                [pos.x as f32 + 1.0, pos.y as f32 + 1.0, pos.z as f32],
+                                [pos.x as f32, pos.y as f32 + 1.0, pos.z as f32 + 1.0],
+                            ],
+                        ];
+                        for face in visual_faces {
+                            tall_grass.add_face(face, [0.0, 0.0, 0.0]);
+                        }
+
+                        // Add full cube for collision (Sensor)
+                        let cube_faces = [
+                            (
+                                [0.0, 1.0, 0.0],
+                                [
+                                    [0.0, 1.0, 0.0],
+                                    [0.0, 1.0, 1.0],
+                                    [1.0, 1.0, 1.0],
+                                    [1.0, 1.0, 0.0],
+                                ],
+                            ),
+                            (
+                                [0.0, -1.0, 0.0],
+                                [
+                                    [0.0, 0.0, 0.0],
+                                    [1.0, 0.0, 0.0],
+                                    [1.0, 0.0, 1.0],
+                                    [0.0, 0.0, 1.0],
+                                ],
+                            ),
+                            (
+                                [1.0, 0.0, 0.0],
+                                [
+                                    [1.0, 0.0, 1.0],
+                                    [1.0, 0.0, 0.0],
+                                    [1.0, 1.0, 0.0],
+                                    [1.0, 1.0, 1.0],
+                                ],
+                            ),
+                            (
+                                [-1.0, 0.0, 0.0],
+                                [
+                                    [0.0, 0.0, 0.0],
+                                    [0.0, 0.0, 1.0],
+                                    [0.0, 1.0, 1.0],
+                                    [0.0, 1.0, 0.0],
+                                ],
+                            ),
+                            (
+                                [0.0, 0.0, 1.0],
+                                [
+                                    [0.0, 0.0, 1.0],
+                                    [1.0, 0.0, 1.0],
+                                    [1.0, 1.0, 1.0],
+                                    [0.0, 1.0, 1.0],
+                                ],
+                            ),
+                            (
+                                [0.0, 0.0, -1.0],
+                                [
+                                    [1.0, 0.0, 0.0],
+                                    [0.0, 0.0, 0.0],
+                                    [0.0, 1.0, 0.0],
+                                    [1.0, 1.0, 0.0],
+                                ],
+                            ),
+                        ];
+                        for (normal, vertices) in cube_faces {
+                            let face = [
+                                [
+                                    pos.x as f32 + vertices[0][0],
+                                    pos.y as f32 + vertices[0][1],
+                                    pos.z as f32 + vertices[0][2],
+                                ],
+                                [
+                                    pos.x as f32 + vertices[1][0],
+                                    pos.y as f32 + vertices[1][1],
+                                    pos.z as f32 + vertices[1][2],
+                                ],
+                                [
+                                    pos.x as f32 + vertices[2][0],
+                                    pos.y as f32 + vertices[2][1],
+                                    pos.z as f32 + vertices[2][2],
+                                ],
+                                [
+                                    pos.x as f32 + vertices[3][0],
+                                    pos.y as f32 + vertices[3][1],
+                                    pos.z as f32 + vertices[3][2],
+                                ],
+                            ];
+                            tall_grass_collision.add_face(face, normal);
+                        }
                         continue;
                     }
 
@@ -337,7 +457,9 @@ pub fn update_chunk_mesh(
                                 .unwrap_or(VoxelType::Air)
                         };
 
-                        if neighbor_voxel == VoxelType::Air {
+                        if neighbor_voxel == VoxelType::Air
+                            || neighbor_voxel == VoxelType::TallGrass
+                        {
                             let face = [
                                 [
                                     pos.x as f32 + vertices[0][0],
@@ -379,8 +501,11 @@ pub fn update_chunk_mesh(
                                     VoxelType::GoldOre => Some(&mut gold_ore),
                                     VoxelType::DiamondOre => Some(&mut diamond_ore),
                                     VoxelType::Bedrock => Some(&mut bedrock),
-                                    VoxelType::Grass | VoxelType::Air => None,
+                                    VoxelType::Grass | VoxelType::Air | VoxelType::TallGrass => {
+                                        None
+                                    }
                                 };
+
                                 if let Some(buffers) = buffers.as_deref_mut() {
                                     buffers.add_face(face, normal);
                                 }
@@ -401,7 +526,7 @@ pub fn update_chunk_mesh(
             .entity(entity)
             .remove::<MeshMaterial3d<StandardMaterial>>();
 
-        if combined.is_empty() {
+        if combined.is_empty() && tall_grass_collision.is_empty() {
             if let Some(mesh) = existing_mesh {
                 meshes.remove(mesh.0.id());
             }
@@ -419,6 +544,23 @@ pub fn update_chunk_mesh(
         commands
             .entity(entity)
             .insert((collider, Visibility::Visible));
+
+        if !tall_grass_collision.is_empty() {
+            let sensor_mesh = tall_grass_collision.into_mesh();
+            let sensor_collider = Collider::from_bevy_mesh(
+                &sensor_mesh,
+                &ComputedColliderShape::TriMesh(TriMeshFlags::default()),
+            )
+            .unwrap();
+            commands.entity(entity).with_children(|parent| {
+                parent.spawn((
+                    sensor_collider,
+                    Sensor,
+                    Transform::default(),
+                    GlobalTransform::default(),
+                ));
+            });
+        }
 
         let grass_top_mesh = if grass_top.is_empty() {
             None
@@ -464,6 +606,11 @@ pub fn update_chunk_mesh(
             None
         } else {
             Some(bedrock.into_mesh())
+        };
+        let tall_grass_mesh = if tall_grass.is_empty() {
+            None
+        } else {
+            Some(tall_grass.into_mesh())
         };
 
         commands.entity(entity).with_children(|parent| {
@@ -557,6 +704,16 @@ pub fn update_chunk_mesh(
                     Visibility::Visible,
                 ));
             }
+            if let Some(mesh) = tall_grass_mesh {
+                let handle = meshes.add(mesh);
+                parent.spawn((
+                    Mesh3d(handle),
+                    MeshMaterial3d(block_assets.tall_grass_material.clone()),
+                    Transform::default(),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                ));
+            }
         });
 
         commands.entity(entity).remove::<NeedsMeshUpdate>();
@@ -630,6 +787,18 @@ pub fn setup_world(
             settings.sampler = ImageSampler::nearest();
         },
     );
+    let tall_grass_texture = asset_server.load_with_settings(
+        "textures/block/short_grass.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
+    let wheat_texture = asset_server.load_with_settings(
+        "textures/item/wheat.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::nearest();
+        },
+    );
     let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE));
     let grass_top_material = materials.add(StandardMaterial {
         base_color_texture: Some(grass_top_texture),
@@ -676,6 +845,20 @@ pub fn setup_world(
         base_color: Color::WHITE,
         ..default()
     });
+    let tall_grass_material = materials.add(StandardMaterial {
+        base_color_texture: Some(tall_grass_texture),
+        base_color: Color::WHITE,
+        alpha_mode: AlphaMode::Mask(0.5),
+        cull_mode: None,
+        ..default()
+    });
+    let wheat_material = materials.add(StandardMaterial {
+        base_color_texture: Some(wheat_texture),
+        base_color: Color::WHITE,
+        alpha_mode: AlphaMode::Mask(0.5),
+        cull_mode: None,
+        ..default()
+    });
 
     commands.insert_resource(BlockAssets {
         mesh: mesh_handle.clone(),
@@ -688,6 +871,8 @@ pub fn setup_world(
         gold_ore_material,
         diamond_ore_material,
         bedrock_material,
+        tall_grass_material,
+        wheat_material,
     });
 
     commands.spawn((
@@ -778,6 +963,16 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
                     };
 
                     chunk_data.set_voxel(IVec3::new(vx as i32, vy as i32, vz as i32), voxel);
+
+                    if world_vy == height && world_vy < WORLD_MAX_Y {
+                        let hash = (world_vx as i64 * 734287 + world_vz as i64 * 1237).abs();
+                        if hash % 100 < 5 {
+                            chunk_data.set_voxel(
+                                IVec3::new(vx as i32, vy as i32 + 1, vz as i32),
+                                VoxelType::TallGrass,
+                            );
+                        }
+                    }
                 }
             }
         }

@@ -95,11 +95,30 @@ pub fn mob_spawner_system(
 
 pub fn mob_behavior_system(
     time: Res<Time>,
-    mut mob_query: Query<(&mut Mob, &mut MobState, &Transform)>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut mob_query: Query<(
+        Entity,
+        &mut Mob,
+        &mut MobState,
+        &Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
     let mut rng = thread_rng();
 
-    for (mut mob, mut state, _transform) in mob_query.iter_mut() {
+    let love_mobs: Vec<(Entity, Vec3)> = mob_query
+        .iter()
+        .filter(|(_, mob, state, _, _)| {
+            matches!(mob.mob_type, MobType::Cow) && state.state == MobBehavior::Love
+        })
+        .map(|(e, _, _, t, _)| (e, t.translation))
+        .collect();
+
+    let mut to_spawn = Vec::new();
+
+    for (entity, mut mob, mut state, transform, material_handle) in mob_query.iter_mut() {
         state.timer -= time.delta_secs();
 
         match state.state {
@@ -126,12 +145,97 @@ pub fn mob_behavior_system(
                     state.timer = rng.gen_range(1.0..2.0);
                 }
             }
+            MobBehavior::Love => {
+                if state.timer <= 0.0 {
+                    state.state = MobBehavior::Idle;
+                    state.timer = rng.gen_range(1.0..3.0);
+                    state.target_entity = None;
+                    state.contact_timer = 0.0;
+                    if let Some(material) = materials.get_mut(material_handle) {
+                        material.base_color = Color::srgb(0.8, 0.6, 0.4); // Reset to brown
+                    }
+                    continue;
+                }
+
+                // Look for another cow in love
+                if state.target_entity.is_none() {
+                    let my_pos = transform.translation;
+                    let closest = love_mobs.iter().filter(|(e, _)| *e != entity).min_by(
+                        |(_, p1), (_, p2)| {
+                            my_pos
+                                .distance_squared(*p1)
+                                .partial_cmp(&my_pos.distance_squared(*p2))
+                                .unwrap()
+                        },
+                    );
+
+                    if let Some((target_e, _)) = closest {
+                        state.target_entity = Some(*target_e);
+                    }
+                }
+
+                // Check for proximity over time
+                if let Some(target_e) = state.target_entity {
+                    if let Some((_, target_pos)) = love_mobs.iter().find(|(e, _)| *e == target_e) {
+                        if transform.translation.distance(*target_pos) < 2.0 {
+                            state.contact_timer += time.delta_secs();
+
+                            if state.contact_timer >= 1.5 {
+                                // Birth!
+                                state.state = MobBehavior::Parent;
+                                state.timer = 10.0; // Break from love
+                                state.target_entity = None;
+                                state.contact_timer = 0.0;
+                                if let Some(material) = materials.get_mut(material_handle) {
+                                    material.base_color = Color::srgb(0.8, 0.6, 0.4);
+                                }
+
+                                // Only one of the pair should spawn the baby
+                                if entity < target_e {
+                                    to_spawn.push(*target_pos);
+                                }
+                            }
+                        } else {
+                            state.contact_timer =
+                                (state.contact_timer - time.delta_secs() * 0.5).max(0.0);
+                        }
+                    } else {
+                        state.target_entity = None; // Target lost (no longer in love?)
+                        state.contact_timer = 0.0;
+                    }
+                }
+            }
+            MobBehavior::Parent => {
+                if state.timer <= 0.0 {
+                    state.state = MobBehavior::Idle;
+                    state.timer = rng.gen_range(1.0..3.0);
+                }
+            }
         }
+    }
+
+    for pos in to_spawn {
+        spawn_mob(&mut commands, &mut meshes, &mut materials, pos);
     }
 }
 
-pub fn mob_movement_system(time: Res<Time>, mut mob_query: Query<(&Mob, &mut Velocity)>) {
-    for (mob, mut velocity) in mob_query.iter_mut() {
+pub fn mob_movement_system(
+    time: Res<Time>,
+    mut mob_query: Query<(&Mob, &MobState, &Transform, &mut Velocity)>,
+    target_query: Query<&Transform>,
+) {
+    for (mob, state, transform, mut velocity) in mob_query.iter_mut() {
+        if state.state == MobBehavior::Love {
+            if let Some(target_e) = state.target_entity {
+                if let Ok(target_transform) = target_query.get(target_e) {
+                    let direction =
+                        (target_transform.translation - transform.translation).normalize_or_zero();
+                    velocity.linvel = direction * mob.max_speed;
+                    continue;
+                }
+            }
+        }
+
         // Simple wandering movement using physics
         if mob.wander_timer > 0.0 {
             let direction = Vec3::new(

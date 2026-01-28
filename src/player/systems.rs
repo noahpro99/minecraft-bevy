@@ -1,10 +1,11 @@
+use crate::mob::components::{Mob, MobBehavior, MobState, MobType};
 use crate::player::components::{
     CameraController, CharacterController, FootstepTimer, Health, Hunger, Inventory, PickupDrops,
     Player,
 };
 use crate::player::resources::SoundAssets;
 use crate::player::settings_menu::Settings;
-use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
+use crate::world::components::{Chunk, DropItem, ItemType, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
 use crate::world::resources::VoxelWorld;
 use crate::world::systems::{BlockAssets, InitialChunkMeshing};
 use bevy::audio::{AudioPlayer, AudioSource, PlaybackSettings, Volume};
@@ -412,7 +413,10 @@ pub fn player_interact(
     mut inventory_query: Query<&mut Inventory, With<Player>>,
     player_query: Query<(Entity, &GlobalTransform), With<Player>>,
     settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
+    mut mob_query: Query<(&Mob, &mut MobState, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mut rng = rand::thread_rng();
     if let Ok(visibility) = settings_menu.single() {
         if *visibility != Visibility::Hidden {
             return;
@@ -433,11 +437,9 @@ pub fn player_interact(
         let ray_direction: Dir3 = camera_global_transform.forward();
 
         let filter = if let Ok((player_entity, _)) = player_query.single() {
-            QueryFilter::default()
-                .exclude_rigid_body(player_entity)
-                .exclude_sensors()
+            QueryFilter::default().exclude_rigid_body(player_entity)
         } else {
-            QueryFilter::default().exclude_sensors()
+            QueryFilter::default()
         };
 
         // Offset ray origin slightly forward to avoid self-collision if filter fails
@@ -454,15 +456,47 @@ pub fn player_interact(
             let hit_point = ray_origin + *ray_direction * toi;
 
             // Target position based on interaction type
+
             // Left click: remove block (aim slightly inside the block)
             // Right click: add block (aim slightly outside the block)
-            let world_voxel_pos = if left_click {
+            let (world_voxel_pos, target_entity) = if left_click {
                 let p: Vec3 = hit_point + *ray_direction * 0.05;
-                p.floor().as_ivec3()
+                (p.floor().as_ivec3(), _entity)
             } else {
                 let p: Vec3 = hit_point - *ray_direction * 0.05;
-                p.floor().as_ivec3()
+                (p.floor().as_ivec3(), _entity)
             };
+
+            if right_click {
+                if let Ok(mut inventory) = inventory_query.single_mut() {
+                    let selected_slot = inventory.selected_slot;
+                    let selected_item = inventory.slots[selected_slot].item_type;
+
+                    if selected_item == ItemType::Wheat {
+                        if let Ok((mob, mut state, material_handle)) =
+                            mob_query.get_mut(target_entity)
+                        {
+                            if matches!(mob.mob_type, MobType::Cow)
+                                && state.state != MobBehavior::Love
+                            {
+                                state.state = MobBehavior::Love;
+                                state.timer = 20.0;
+                                if let Some(material) = materials.get_mut(material_handle) {
+                                    material.base_color = Color::srgb(1.0, 0.4, 0.4);
+                                    // Redder
+                                }
+                                // Consume wheat
+                                let slot = &mut inventory.slots[selected_slot];
+                                slot.count -= 1;
+                                if slot.count == 0 {
+                                    slot.item_type = ItemType::None;
+                                }
+                                return; // Don't place block
+                            }
+                        }
+                    }
+                }
+            }
 
             let chunk_pos = VoxelWorld::world_to_chunk_pos(world_voxel_pos.as_vec3());
             let local_voxel_pos = VoxelWorld::voxel_to_local_pos(world_voxel_pos);
@@ -482,7 +516,36 @@ pub fn player_interact(
                                 chunk_pos,
                                 local_voxel_pos,
                             );
-                            spawn_drop_item(&mut commands, &block_assets, world_voxel_pos, voxel);
+
+                            let drop_item_type = if voxel == VoxelType::TallGrass {
+                                use rand::Rng;
+                                if rng.gen_bool(0.1) {
+                                    ItemType::Wheat
+                                } else {
+                                    ItemType::None
+                                }
+                            } else {
+                                match voxel {
+                                    VoxelType::Grass => ItemType::GrassBlock,
+                                    VoxelType::Dirt => ItemType::Dirt,
+                                    VoxelType::Stone => ItemType::Stone,
+                                    VoxelType::CoalOre => ItemType::CoalOre,
+                                    VoxelType::IronOre => ItemType::IronOre,
+                                    VoxelType::GoldOre => ItemType::GoldOre,
+                                    VoxelType::DiamondOre => ItemType::DiamondOre,
+                                    _ => ItemType::None,
+                                }
+                            };
+
+                            if drop_item_type != ItemType::None {
+                                spawn_drop_item(
+                                    &mut commands,
+                                    &block_assets,
+                                    world_voxel_pos,
+                                    drop_item_type,
+                                );
+                            }
+
                             if let Some(sound) = block_break_sound(voxel, &sound_assets) {
                                 play_sound(&mut commands, sound, settings.master_volume);
                             }
@@ -490,8 +553,20 @@ pub fn player_interact(
                     } else if right_click {
                         if let Ok(mut inventory) = inventory_query.single_mut() {
                             let selected_slot = inventory.selected_slot;
-                            let selected_item = inventory.slots[selected_slot].voxel_type;
-                            if selected_item != VoxelType::Air
+                            let selected_item = inventory.slots[selected_slot].item_type;
+
+                            let place_voxel = match selected_item {
+                                ItemType::GrassBlock => VoxelType::Grass,
+                                ItemType::Dirt => VoxelType::Dirt,
+                                ItemType::Stone => VoxelType::Stone,
+                                ItemType::CoalOre => VoxelType::CoalOre,
+                                ItemType::IronOre => VoxelType::IronOre,
+                                ItemType::GoldOre => VoxelType::GoldOre,
+                                ItemType::DiamondOre => VoxelType::DiamondOre,
+                                _ => VoxelType::Air,
+                            };
+
+                            if place_voxel != VoxelType::Air
                                 && chunk.get_voxel(local_voxel_pos) == VoxelType::Air
                             {
                                 // Prevent placing block inside player
@@ -512,7 +587,7 @@ pub fn player_interact(
                                     }
                                 }
 
-                                chunk.set_voxel(local_voxel_pos, selected_item);
+                                chunk.set_voxel(local_voxel_pos, place_voxel);
                                 commands.entity(chunk_entity).insert(NeedsMeshUpdate);
                                 mark_neighbor_chunks(
                                     &mut commands,
@@ -530,7 +605,7 @@ pub fn player_interact(
                                 if slot.count > 0 {
                                     slot.count -= 1;
                                     if slot.count == 0 {
-                                        slot.voxel_type = VoxelType::Air;
+                                        slot.item_type = ItemType::None;
                                     }
                                 }
                             }
@@ -546,24 +621,24 @@ fn spawn_drop_item(
     commands: &mut Commands,
     block_assets: &BlockAssets,
     voxel_pos: IVec3,
-    voxel_type: VoxelType,
+    item_type: ItemType,
 ) {
-    let material = match voxel_type {
-        VoxelType::Grass => block_assets.grass_side_material.clone(),
-        VoxelType::Dirt => block_assets.dirt_material.clone(),
-        VoxelType::Stone => block_assets.stone_material.clone(),
-        VoxelType::CoalOre => block_assets.coal_ore_material.clone(),
-        VoxelType::IronOre => block_assets.iron_ore_material.clone(),
-        VoxelType::GoldOre => block_assets.gold_ore_material.clone(),
-        VoxelType::DiamondOre => block_assets.diamond_ore_material.clone(),
-        VoxelType::Bedrock => return,
-        VoxelType::Air => return,
+    let material = match item_type {
+        ItemType::GrassBlock => block_assets.grass_side_material.clone(),
+        ItemType::Dirt => block_assets.dirt_material.clone(),
+        ItemType::Stone => block_assets.stone_material.clone(),
+        ItemType::CoalOre => block_assets.coal_ore_material.clone(),
+        ItemType::IronOre => block_assets.iron_ore_material.clone(),
+        ItemType::GoldOre => block_assets.gold_ore_material.clone(),
+        ItemType::DiamondOre => block_assets.diamond_ore_material.clone(),
+        ItemType::Wheat => block_assets.wheat_material.clone(),
+        ItemType::None => return,
     };
 
     let translation = voxel_pos.as_vec3() + Vec3::splat(0.5);
     commands.spawn((
         DropItem {
-            voxel_type,
+            item_type,
             velocity: Vec3::ZERO,
         },
         Mesh3d(block_assets.mesh.clone()),
@@ -664,7 +739,7 @@ pub fn pickup_drops(
                 continue;
             }
 
-            if add_to_inventory(&mut inventory, drop.voxel_type) {
+            if add_to_inventory(&mut inventory, drop.item_type) {
                 commands.entity(drop_entity).despawn();
                 play_sound(
                     &mut commands,
@@ -677,19 +752,19 @@ pub fn pickup_drops(
     }
 }
 
-fn add_to_inventory(inventory: &mut Inventory, voxel_type: VoxelType) -> bool {
+fn add_to_inventory(inventory: &mut Inventory, item_type: ItemType) -> bool {
     let max_stack = 64;
 
     for slot in &mut inventory.slots {
-        if slot.voxel_type == voxel_type && slot.count < max_stack {
+        if slot.item_type == item_type && slot.count < max_stack {
             slot.count += 1;
             return true;
         }
     }
 
     for slot in &mut inventory.slots {
-        if slot.voxel_type == VoxelType::Air {
-            slot.voxel_type = voxel_type;
+        if slot.item_type == ItemType::None {
+            slot.item_type = item_type;
             slot.count = 1;
             return true;
         }
@@ -790,7 +865,9 @@ fn play_sound(commands: &mut Commands, sound: Handle<AudioSource>, volume: f32) 
 
 fn block_break_sound(voxel: VoxelType, sound_assets: &SoundAssets) -> Option<Handle<AudioSource>> {
     match voxel {
-        VoxelType::Grass | VoxelType::Dirt => Some(sound_assets.break_grass.clone()),
+        VoxelType::Grass | VoxelType::Dirt | VoxelType::TallGrass => {
+            Some(sound_assets.break_grass.clone())
+        }
         VoxelType::Stone
         | VoxelType::CoalOre
         | VoxelType::IronOre
