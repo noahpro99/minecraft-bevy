@@ -12,6 +12,20 @@ pub struct SoundAssets {
     pub step_dirt: Handle<AudioSource>,
 }
 
+impl Default for SoundAssets {
+    fn default() -> Self {
+        Self {
+            break_grass: Handle::default(),
+            break_stone: Handle::default(),
+            place_block: Handle::default(),
+            pickup_item: Handle::default(),
+            step_grass: Handle::default(),
+            step_stone: Handle::default(),
+            step_dirt: Handle::default(),
+        }
+    }
+}
+
 pub fn load_sound_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(SoundAssets {
         break_grass: asset_server.load("sounds/dig/grass1.ogg"),

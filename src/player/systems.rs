@@ -12,17 +12,24 @@ use bevy::audio::{AudioPlayer, AudioSource, PlaybackSettings, Volume};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-pub fn spawn_player(mut commands: Commands) {
-    commands
+pub fn spawn_player(mut commands: Commands, world_settings: Res<crate::main_menu::WorldSettings>) {
+    let inventory = world_settings.inventory.clone().unwrap_or_default();
+    let spawn_pos = world_settings
+        .player_position
+        .unwrap_or_else(|| Vec3::new(0.0, spawn_height(), 0.0));
+
+    let player_entity = commands
         .spawn((
             Player,
             CharacterController::default(),
-            Inventory::default(),
+            inventory,
             Health::default(),
             Hunger::default(),
             PickupDrops,
-            Transform::from_xyz(0.0, spawn_height(), 0.0),
+            Transform::from_translation(spawn_pos),
             GlobalTransform::default(),
+        ))
+        .insert((
             Visibility::Visible,
             RigidBody::Dynamic,
             Collider::cuboid(0.3, 0.9, 0.3),
@@ -30,24 +37,30 @@ pub fn spawn_player(mut commands: Commands) {
             LockedAxes::ROTATION_LOCKED,
             Ccd::enabled(),
             Velocity::default(),
+            crate::world::components::InGameEntity,
         ))
         .insert(FootstepTimer::default())
         .insert(TransformInterpolation::default())
-        .with_children(|parent| {
-            parent.spawn((
-                Camera3d::default(),
-                Camera {
-                    clear_color: Color::srgb(0.5, 0.7, 1.0).into(), // Light blue sky
-                    order: 0,
-                    ..default()
-                },
-                IsDefaultUiCamera,
-                CameraController { sensitivity: 0.1 },
-                Transform::from_xyz(0.0, 0.75, 0.0),
-                GlobalTransform::default(),
-                Visibility::Visible,
-            ));
-        });
+        .id();
+
+    let camera_entity = commands
+        .spawn((
+            Camera3d::default(),
+            Camera {
+                clear_color: Color::srgb(0.5, 0.7, 1.0).into(), // Light blue sky
+                order: 0,
+                ..default()
+            },
+            IsDefaultUiCamera,
+            CameraController { sensitivity: 0.1 },
+            Transform::from_xyz(0.0, 0.75, 0.0),
+            GlobalTransform::default(),
+            Visibility::Visible,
+            crate::world::components::InGameEntity,
+        ))
+        .id();
+
+    commands.entity(player_entity).add_child(camera_entity);
 }
 
 fn spawn_height() -> f32 {
@@ -68,6 +81,7 @@ pub fn spawn_player_when_ready(
     players: Query<Entity, With<Player>>,
     voxel_world: Res<VoxelWorld>,
     chunk_colliders: Query<(), With<Collider>>,
+    world_settings: Res<crate::main_menu::WorldSettings>,
 ) {
     if meshing.0 {
         return;
@@ -76,7 +90,10 @@ pub fn spawn_player_when_ready(
         return;
     }
 
-    let spawn_pos = Vec3::new(0.0, spawn_height(), 0.0);
+    let spawn_pos = world_settings
+        .player_position
+        .unwrap_or_else(|| Vec3::new(0.0, spawn_height(), 0.0));
+
     let spawn_chunk_pos = VoxelWorld::world_to_chunk_pos(spawn_pos);
     let has_chunk = voxel_world
         .chunks
@@ -87,7 +104,7 @@ pub fn spawn_player_when_ready(
         return;
     }
 
-    spawn_player(commands);
+    spawn_player(commands, world_settings);
 }
 
 pub fn player_look(
@@ -646,6 +663,7 @@ fn spawn_drop_item(
         Transform::from_translation(translation).with_scale(Vec3::splat(0.4)),
         GlobalTransform::default(),
         Visibility::Visible,
+        crate::world::components::InGameEntity,
     ));
 }
 
@@ -860,6 +878,7 @@ fn play_sound(commands: &mut Commands, sound: Handle<AudioSource>, volume: f32) 
             .with_volume(Volume::Linear(volume)),
         Transform::default(),
         GlobalTransform::default(),
+        crate::world::components::InGameEntity,
     ));
 }
 

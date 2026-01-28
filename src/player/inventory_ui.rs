@@ -2,10 +2,10 @@ use crate::player::components::{Health, Hunger, Inventory, InventorySlotIcon};
 use crate::player::settings_menu::{
     FootstepVolumeDecreaseButton, FootstepVolumeIncreaseButton, FootstepVolumeText,
     FovDecreaseButton, FovIncreaseButton, FovText, MasterVolumeDecreaseButton,
-    MasterVolumeIncreaseButton, MasterVolumeText, RenderDistanceDecreaseButton,
+    MasterVolumeIncreaseButton, MasterVolumeText, QuitToMenuButton, RenderDistanceDecreaseButton,
     RenderDistanceIncreaseButton, RenderDistanceText, ResumeButton, SettingsMenu,
 };
-use crate::world::components::{ItemType, VoxelType};
+use crate::world::components::ItemType;
 use bevy::image::{ImageLoaderSettings, ImageSampler, TRANSPARENT_IMAGE_HANDLE};
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
@@ -58,6 +58,12 @@ pub struct InventoryIconAssets {
     pub diamond_ore: Handle<Image>,
     pub wheat: Handle<Image>,
 }
+
+#[derive(Component)]
+pub struct HotbarRoot;
+
+#[derive(Component)]
+pub struct InventoryRoot;
 
 pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     let grass_icon = asset_server.load_with_settings(
@@ -136,6 +142,7 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             Crosshair,
+            crate::world::components::InGameEntity,
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -163,14 +170,17 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 
     commands
-        .spawn((Node {
-            width: Val::Px(220.0),
-            height: Val::Px(30.0),
-            position_type: PositionType::Absolute,
-            left: Val::Px(12.0),
-            top: Val::Px(12.0),
-            ..default()
-        },))
+        .spawn((
+            Node {
+                width: Val::Px(220.0),
+                height: Val::Px(30.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(12.0),
+                top: Val::Px(12.0),
+                ..default()
+            },
+            crate::world::components::InGameEntity,
+        ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("Health: 20/20"),
@@ -184,14 +194,17 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 
     commands
-        .spawn((Node {
-            width: Val::Px(220.0),
-            height: Val::Px(26.0),
-            position_type: PositionType::Absolute,
-            left: Val::Px(12.0),
-            top: Val::Px(40.0),
-            ..default()
-        },))
+        .spawn((
+            Node {
+                width: Val::Px(220.0),
+                height: Val::Px(26.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(12.0),
+                top: Val::Px(40.0),
+                ..default()
+            },
+            crate::world::components::InGameEntity,
+        ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("Hunger: 20/20"),
@@ -207,18 +220,20 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
             Node {
-                width: Val::Vw(100.0),
-                height: Val::Px(36.0),
                 position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                bottom: Val::Px(0.0),
-                padding: UiRect::horizontal(Val::Px(12.0)),
-                align_items: AlignItems::Center,
+                bottom: Val::Px(100.0),
+                left: Val::Px(20.0),
+                width: Val::Px(400.0),
+                height: Val::Px(30.0),
+                border: UiRect::all(Val::Px(1.0)),
+                padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
-            Visibility::Hidden,
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            BorderColor::all(Color::WHITE),
             CommandInputRoot,
+            crate::world::components::InGameEntity,
+            Visibility::Hidden,
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -235,17 +250,17 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
             Node {
-                width: Val::Vw(100.0),
-                height: Val::Px(90.0),
                 position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                bottom: Val::Px(36.0),
-                padding: UiRect::horizontal(Val::Px(12.0)),
-                align_items: AlignItems::FlexStart,
+                bottom: Val::Px(140.0),
+                left: Val::Px(20.0),
+                width: Val::Px(400.0),
+                flex_direction: FlexDirection::ColumnReverse,
+                row_gap: Val::Px(2.0),
                 ..default()
             },
-            Visibility::Hidden,
             CommandHistoryRoot,
+            crate::world::components::InGameEntity,
+            Visibility::Hidden,
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -263,19 +278,16 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
             Node {
-                width: Val::Vw(100.0),
-                height: Val::Px(70.0),
+                width: Val::Percent(100.0),
+                height: Val::Px(60.0),
                 position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                bottom: Val::Px(5.0),
+                bottom: Val::Px(20.0),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
-                flex_direction: FlexDirection::Row,
-                padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.2, 0.2, 0.2, 0.8)),
-            InventoryBar,
+            HotbarRoot,
+            crate::world::components::InGameEntity,
         ))
         .with_children(|parent| {
             for i in 0..10 {
@@ -331,6 +343,7 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             SettingsMenu,
+            crate::world::components::InGameEntity,
             Visibility::Hidden,
         ))
         .with_children(|parent| {
@@ -720,6 +733,32 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                         .with_children(|parent| {
                             parent.spawn((
                                 Text::new("RESUME"),
+                                TextFont {
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                            ));
+                        });
+
+                    parent
+                        .spawn((
+                            Button,
+                            Node {
+                                width: Val::Px(200.0),
+                                height: Val::Px(50.0),
+                                border: UiRect::all(Val::Px(2.0)),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.4, 0.2, 0.2)),
+                            BorderColor::all(Color::WHITE),
+                            QuitToMenuButton,
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Text::new("QUIT TO MENU"),
                                 TextFont {
                                     font_size: 20.0,
                                     ..default()

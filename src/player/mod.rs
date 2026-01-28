@@ -16,7 +16,11 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Settings>()
-            .add_systems(Startup, (setup_ui, load_sound_assets))
+            .init_resource::<SoundAssets>()
+            .add_systems(
+                OnEnter(crate::main_menu::AppState::InGame),
+                (setup_ui, load_sound_assets),
+            )
             .init_resource::<CommandState>()
             .add_systems(
                 Update,
@@ -36,9 +40,11 @@ impl Plugin for PlayerPlugin {
                     handle_master_volume_buttons,
                     handle_footstep_volume_buttons,
                     handle_resume_button,
+                    handle_quit_button,
                     update_sprint_fov,
                     update_footsteps,
-                ),
+                )
+                    .run_if(in_state(crate::main_menu::AppState::InGame)),
             )
             .add_systems(
                 FixedUpdate,
@@ -47,7 +53,8 @@ impl Plugin for PlayerPlugin {
                     update_drop_items,
                     update_hunger,
                     handle_player_death,
-                ),
+                )
+                    .run_if(in_state(crate::main_menu::AppState::InGame)),
             );
     }
 }

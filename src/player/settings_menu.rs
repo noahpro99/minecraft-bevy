@@ -36,6 +36,9 @@ pub struct FovIncreaseButton;
 pub struct ResumeButton;
 
 #[derive(Component)]
+pub struct QuitToMenuButton;
+
+#[derive(Component)]
 pub struct RenderDistanceText;
 
 #[derive(Component)]
@@ -112,6 +115,45 @@ pub fn handle_resume_button(
             }
             Interaction::None => {
                 *color = BackgroundColor(Color::srgb(0.2, 0.2, 0.2));
+            }
+        }
+    }
+}
+
+pub fn handle_quit_button(
+    mut interaction_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (Changed<Interaction>, With<Button>, With<QuitToMenuButton>),
+    >,
+    mut next_state: ResMut<NextState<crate::main_menu::AppState>>,
+    mut window_query: Query<(Entity, &mut Window, &mut CursorOptions)>,
+    player_query: Query<
+        (&Transform, &crate::player::components::Inventory),
+        With<crate::player::components::Player>,
+    >,
+    mut world_settings: ResMut<crate::main_menu::WorldSettings>,
+) {
+    for (interaction, mut color) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                // Manually trigger inventory save before state transition to be safe
+                if let Ok((transform, inventory)) = player_query.single() {
+                    world_settings.player_position = Some(transform.translation);
+                    world_settings.inventory = Some(inventory.clone());
+                }
+
+                // Ensure cursor is released before switching states
+                if let Ok((_, _, mut cursor)) = window_query.single_mut() {
+                    cursor.grab_mode = bevy::window::CursorGrabMode::None;
+                    cursor.visible = true;
+                }
+                next_state.set(crate::main_menu::AppState::MainMenu);
+            }
+            Interaction::Hovered => {
+                *color = BackgroundColor(Color::srgb(0.6, 0.3, 0.3));
+            }
+            Interaction::None => {
+                *color = BackgroundColor(Color::srgb(0.4, 0.2, 0.2));
             }
         }
     }

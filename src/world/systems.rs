@@ -5,7 +5,9 @@ use bevy::mesh::Indices;
 use bevy::prelude::*;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;
+use noise::{NoiseFn, Perlin};
 
+use crate::main_menu::WorldSettings;
 use crate::player::settings_menu::Settings;
 use crate::world::components::{
     Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
@@ -45,6 +47,7 @@ pub fn spawn_chunks_around_player(
     player_query: Query<&Transform, With<crate::player::components::Player>>,
     settings: Res<Settings>,
     initial_meshing: Res<InitialChunkMeshing>,
+    world_settings: Res<WorldSettings>,
 ) {
     let player_transform = match player_query.iter().next() {
         Some(t) => t,
@@ -63,6 +66,8 @@ pub fn spawn_chunks_around_player(
         return;
     }
 
+    let perlin = Perlin::new(world_settings.seed as u32);
+
     let mut spawned = 0;
     for y in min_chunk_y..=max_chunk_y {
         for x in -view_distance..=view_distance {
@@ -70,7 +75,8 @@ pub fn spawn_chunks_around_player(
                 let chunk_key = IVec3::new(player_chunk_pos.x + x, y, player_chunk_pos.z + z);
 
                 if !voxel_world.chunks.contains_key(&chunk_key) {
-                    let chunk_data = generate_chunk(chunk_key, base_height, amplitude, frequency);
+                    let chunk_data =
+                        generate_chunk(chunk_key, base_height, amplitude, frequency, &perlin);
 
                     let entity = commands
                         .spawn((
@@ -81,6 +87,7 @@ pub fn spawn_chunks_around_player(
                             RigidBody::Fixed,
                             Friction::coefficient(0.0),
                             Visibility::Visible,
+                            crate::world::components::InGameEntity,
                         ))
                         .id();
                     voxel_world.chunks.insert(chunk_key, entity);
@@ -157,6 +164,10 @@ pub fn apply_chunk_despawns(
         }
         commands.entity(entity).despawn();
     }
+}
+
+pub fn reset_voxel_world(mut voxel_world: ResMut<VoxelWorld>) {
+    voxel_world.chunks.clear();
 }
 
 pub fn update_chunk_mesh(
@@ -518,20 +529,26 @@ pub fn update_chunk_mesh(
 
         if let Ok(children) = children_query.get(entity) {
             for child in children.iter() {
-                commands.entity(child).despawn();
+                if let Ok(mut child_commands) = commands.get_entity(child) {
+                    child_commands.despawn();
+                }
             }
         }
-        commands.entity(entity).remove::<Mesh3d>();
-        commands
-            .entity(entity)
-            .remove::<MeshMaterial3d<StandardMaterial>>();
+        if let Ok(mut entity_commands) = commands.get_entity(entity) {
+            entity_commands.remove::<Mesh3d>();
+            entity_commands.remove::<MeshMaterial3d<StandardMaterial>>();
+        } else {
+            continue;
+        }
 
         if combined.is_empty() && tall_grass_collision.is_empty() {
             if let Some(mesh) = existing_mesh {
                 meshes.remove(mesh.0.id());
             }
-            commands.entity(entity).remove::<Collider>();
-            commands.entity(entity).remove::<NeedsMeshUpdate>();
+            if let Ok(mut entity_commands) = commands.get_entity(entity) {
+                entity_commands.remove::<Collider>();
+                entity_commands.remove::<NeedsMeshUpdate>();
+            }
             continue;
         }
 
@@ -541,25 +558,27 @@ pub fn update_chunk_mesh(
             &ComputedColliderShape::TriMesh(TriMeshFlags::default()),
         )
         .unwrap();
-        commands
-            .entity(entity)
-            .insert((collider, Visibility::Visible));
+        if let Ok(mut entity_commands) = commands.get_entity(entity) {
+            entity_commands.insert((collider, Visibility::Visible));
 
-        if !tall_grass_collision.is_empty() {
-            let sensor_mesh = tall_grass_collision.into_mesh();
-            let sensor_collider = Collider::from_bevy_mesh(
-                &sensor_mesh,
-                &ComputedColliderShape::TriMesh(TriMeshFlags::default()),
-            )
-            .unwrap();
-            commands.entity(entity).with_children(|parent| {
-                parent.spawn((
-                    sensor_collider,
-                    Sensor,
-                    Transform::default(),
-                    GlobalTransform::default(),
-                ));
-            });
+            if !tall_grass_collision.is_empty() {
+                let sensor_mesh = tall_grass_collision.into_mesh();
+                let sensor_collider = Collider::from_bevy_mesh(
+                    &sensor_mesh,
+                    &ComputedColliderShape::TriMesh(TriMeshFlags::default()),
+                )
+                .unwrap();
+                entity_commands.with_children(|parent| {
+                    parent.spawn((
+                        sensor_collider,
+                        Sensor,
+                        Transform::default(),
+                        GlobalTransform::default(),
+                    ));
+                });
+            }
+        } else {
+            continue;
         }
 
         let grass_top_mesh = if grass_top.is_empty() {
@@ -613,110 +632,122 @@ pub fn update_chunk_mesh(
             Some(tall_grass.into_mesh())
         };
 
-        commands.entity(entity).with_children(|parent| {
-            if let Some(mesh) = grass_top_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.grass_top_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = grass_side_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.grass_side_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = dirt_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.dirt_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = stone_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.stone_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = coal_ore_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.coal_ore_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = iron_ore_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.iron_ore_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = gold_ore_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.gold_ore_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = diamond_ore_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.diamond_ore_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = bedrock_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.bedrock_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-            if let Some(mesh) = tall_grass_mesh {
-                let handle = meshes.add(mesh);
-                parent.spawn((
-                    Mesh3d(handle),
-                    MeshMaterial3d(block_assets.tall_grass_material.clone()),
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                ));
-            }
-        });
+        if let Ok(mut entity_commands) = commands.get_entity(entity) {
+            entity_commands.with_children(|parent| {
+                if let Some(mesh) = grass_top_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.grass_top_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = grass_side_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.grass_side_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = dirt_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.dirt_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = stone_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.stone_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = coal_ore_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.coal_ore_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = iron_ore_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.iron_ore_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = gold_ore_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.gold_ore_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = diamond_ore_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.diamond_ore_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = bedrock_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.bedrock_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+                if let Some(mesh) = tall_grass_mesh {
+                    let handle = meshes.add(mesh);
+                    parent.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(block_assets.tall_grass_material.clone()),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        crate::world::components::InGameEntity,
+                    ));
+                }
+            });
 
-        commands.entity(entity).remove::<NeedsMeshUpdate>();
+            entity_commands.remove::<NeedsMeshUpdate>();
+        }
     }
 
     if initial_meshing.0 && query.is_empty() {
@@ -731,6 +762,7 @@ pub fn setup_world(
     asset_server: Res<AssetServer>,
     mut voxel_world: ResMut<VoxelWorld>,
     settings: Res<Settings>,
+    world_settings: Res<WorldSettings>,
 ) {
     commands.insert_resource(InitialChunkMeshing(true));
     let dirt_texture = asset_server.load_with_settings(
@@ -883,6 +915,7 @@ pub fn setup_world(
         },
         Transform::from_xyz(80.0, 120.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
         SunLight,
+        crate::world::components::InGameEntity,
     ));
 
     let view_distance = settings.render_distance;
@@ -891,11 +924,14 @@ pub fn setup_world(
     let amplitude = 8.0;
     let frequency = 0.04;
 
+    let perlin = Perlin::new(world_settings.seed as u32);
+
     for y in min_chunk_y..=max_chunk_y {
         for x in -view_distance..=view_distance {
             for z in -view_distance..=view_distance {
                 let chunk_key = IVec3::new(x, y, z);
-                let chunk_data = generate_chunk(chunk_key, base_height, amplitude, frequency);
+                let chunk_data =
+                    generate_chunk(chunk_key, base_height, amplitude, frequency, &perlin);
                 let entity = commands
                     .spawn((
                         chunk_data,
@@ -905,6 +941,7 @@ pub fn setup_world(
                         RigidBody::Fixed,
                         Friction::coefficient(0.0),
                         Visibility::Visible,
+                        crate::world::components::InGameEntity,
                     ))
                     .id();
                 voxel_world.chunks.insert(chunk_key, entity);
@@ -913,7 +950,13 @@ pub fn setup_world(
     }
 }
 
-fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency: f32) -> Chunk {
+fn generate_chunk(
+    chunk_key: IVec3,
+    base_height: f32,
+    amplitude: f32,
+    frequency: f32,
+    perlin: &Perlin,
+) -> Chunk {
     let mut chunk_data = Chunk::empty();
     let chunk_world_y = chunk_key.y * CHUNK_SIZE as i32;
 
@@ -922,11 +965,11 @@ fn generate_chunk(chunk_key: IVec3, base_height: f32, amplitude: f32, frequency:
             let world_vx = chunk_key.x * CHUNK_SIZE as i32 + vx as i32;
             let world_vz = chunk_key.z * CHUNK_SIZE as i32 + vz as i32;
 
-            let wave = (world_vx as f32 * frequency).sin()
-                + (world_vz as f32 * frequency).cos()
-                + (world_vx as f32 * frequency * 0.5).sin() * 0.5
-                + (world_vz as f32 * frequency * 0.5).cos() * 0.5;
-            let mut height = (base_height + wave * amplitude * 0.5).round() as i32;
+            let noise_val = perlin.get([
+                world_vx as f64 * frequency as f64,
+                world_vz as f64 * frequency as f64,
+            ]);
+            let mut height = (base_height + noise_val as f32 * amplitude).round() as i32;
             if height < WORLD_MIN_Y + 1 {
                 height = WORLD_MIN_Y + 1;
             }

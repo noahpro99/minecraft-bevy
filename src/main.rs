@@ -1,7 +1,9 @@
+mod main_menu;
 mod mob;
 mod player;
 mod world;
 
+use crate::main_menu::MainMenuPlugin;
 use crate::player::PlayerPlugin;
 use crate::world::WorldPlugin;
 use bevy::prelude::*;
@@ -12,7 +14,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Minecraft Bevy".into(),
+                title: "EXPLR".into(),
                 resolution: (1280, 720).into(),
                 present_mode: PresentMode::AutoVsync,
                 ..default()
@@ -27,6 +29,7 @@ fn main() {
             substeps: 1,
         })
         .insert_resource(Time::<Fixed>::from_hz(20.0))
+        .add_plugins(MainMenuPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(WorldPlugin)
         .add_plugins(crate::mob::MobPlugin)
@@ -48,7 +51,16 @@ fn grab_cursor(
     mouse_input: Res<ButtonInput<MouseButton>>,
     key_input: Res<ButtonInput<KeyCode>>,
     settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
+    app_state: Res<State<crate::main_menu::AppState>>,
 ) {
+    if *app_state.get() != crate::main_menu::AppState::InGame {
+        if let Ok((_entity, mut _window, mut cursor)) = window_query.single_mut() {
+            cursor.grab_mode = CursorGrabMode::None;
+            cursor.visible = true;
+        }
+        return;
+    }
+
     if let Ok((_entity, mut _window, mut cursor)) = window_query.single_mut() {
         let Ok(menu_visibility) = settings_menu.single() else {
             return;

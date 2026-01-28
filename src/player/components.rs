@@ -1,5 +1,6 @@
-use crate::world::components::{ItemType, VoxelType};
+use crate::world::components::ItemType;
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Component)]
 pub struct Player;
@@ -62,13 +63,13 @@ impl Default for CharacterController {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct InventorySlot {
     pub item_type: ItemType,
     pub count: u32,
 }
 
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 pub struct Inventory {
     pub slots: [InventorySlot; 10],
     pub selected_slot: usize,

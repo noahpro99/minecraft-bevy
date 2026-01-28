@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub const CHUNK_SIZE: usize = 16;
 
@@ -21,6 +22,9 @@ pub enum VoxelType {
 }
 
 #[derive(Component)]
+pub struct InGameEntity;
+
+#[derive(Component)]
 pub struct Chunk {
     pub voxels: [[[VoxelType; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
 }
@@ -31,7 +35,7 @@ pub struct ChunkPosition(pub IVec3);
 #[derive(Component)]
 pub struct SunLight;
 
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 pub enum ItemType {
     #[default]
     None,
