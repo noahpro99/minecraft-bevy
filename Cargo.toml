@@ -31,6 +31,7 @@ bevy = { version = "0.18.0", default-features = false, features = [
 ] }
 bevy_rapier3d = { git = "https://github.com/Buncys/bevy_rapier", branch = "bevy-0.18.0" }
 noise = "0.9.0"
+rand = "0.8.5"
 
 [patch.crates-io]
 bevy = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }

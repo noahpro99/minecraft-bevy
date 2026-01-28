@@ -58,43 +58,43 @@ pub struct InventoryIconAssets {
 
 pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     let grass_icon = asset_server.load_with_settings(
-        "textures/grass_block_top.png",
+        "textures/block/grass_block_top.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let dirt_icon = asset_server.load_with_settings(
-        "textures/dirt.png",
+        "textures/block/dirt.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let stone_icon = asset_server.load_with_settings(
-        "textures/stone.png",
+        "textures/block/stone.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let coal_ore_icon = asset_server.load_with_settings(
-        "textures/coal_ore.png",
+        "textures/block/coal_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let iron_ore_icon = asset_server.load_with_settings(
-        "textures/iron_ore.png",
+        "textures/block/iron_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let gold_ore_icon = asset_server.load_with_settings(
-        "textures/gold_ore.png",
+        "textures/block/gold_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let diamond_ore_icon = asset_server.load_with_settings(
-        "textures/diamond_ore.png",
+        "textures/block/diamond_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },

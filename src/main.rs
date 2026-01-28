@@ -1,3 +1,4 @@
+mod mob;
 mod player;
 mod world;
 
@@ -27,6 +28,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(20.0))
         .add_plugins(PlayerPlugin)
         .add_plugins(WorldPlugin)
+        .add_plugins(crate::mob::MobPlugin)
         .add_systems(Startup, configure_rapier)
         .add_systems(Update, grab_cursor)
         .run();

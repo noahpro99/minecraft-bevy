@@ -7,10 +7,10 @@ use bevy::render::render_resource::PrimitiveTopology;
 use bevy_rapier3d::prelude::*;
 
 use crate::player::settings_menu::Settings;
-use crate::world::VoxelWorld;
 use crate::world::components::{
-    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
 };
+use crate::world::VoxelWorld;
 
 #[derive(Component)]
 pub struct Block;
@@ -577,55 +577,55 @@ pub fn setup_world(
 ) {
     commands.insert_resource(InitialChunkMeshing(true));
     let dirt_texture = asset_server.load_with_settings(
-        "textures/dirt.png",
+        "textures/block/dirt.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let grass_top_texture = asset_server.load_with_settings(
-        "textures/grass_block_top.png",
+        "textures/block/grass_block_top.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let grass_side_texture = asset_server.load_with_settings(
-        "textures/grass_block_side.png",
+        "textures/block/grass_block_side.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let stone_texture = asset_server.load_with_settings(
-        "textures/stone.png",
+        "textures/block/stone.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let coal_ore_texture = asset_server.load_with_settings(
-        "textures/coal_ore.png",
+        "textures/block/coal_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let iron_ore_texture = asset_server.load_with_settings(
-        "textures/iron_ore.png",
+        "textures/block/iron_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let gold_ore_texture = asset_server.load_with_settings(
-        "textures/gold_ore.png",
+        "textures/block/gold_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let diamond_ore_texture = asset_server.load_with_settings(
-        "textures/diamond_ore.png",
+        "textures/block/diamond_ore.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
     );
     let bedrock_texture = asset_server.load_with_settings(
-        "textures/bedrock.png",
+        "textures/block/bedrock.png",
         |settings: &mut ImageLoaderSettings| {
             settings.sampler = ImageSampler::nearest();
         },
