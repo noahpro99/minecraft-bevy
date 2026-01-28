@@ -1,0 +1,86 @@
+[package]
+name = "minecraft-bevy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.18.0", default-features = false, features = [
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_gltf",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_render",
+    "bevy_winit",
+    "bevy_asset",
+    "bevy_scene",
+    "bevy_gizmos",
+    "bevy_audio",
+    "bevy_gilrs",
+    "bevy_state",
+    "bevy_log",
+    "multi_threaded",
+    "wayland",
+    "png",
+    "hdr",
+    "zstd_rust",
+    "default_font",
+    "tonemapping_luts",
+    "dynamic_linking",
+] }
+bevy_rapier3d = { git = "https://github.com/Buncys/bevy_rapier", branch = "bevy-0.18.0" }
+noise = "0.9.0"
+
+[patch.crates-io]
+bevy = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_app = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_asset = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_core_pipeline = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_ecs = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_gizmos = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_pbr = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_render = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_scene = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_sprite = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_text = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_ui = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_window = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_winit = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_time = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_transform = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_utils = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_math = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_reflect = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_log = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_diagnostic = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_input = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_mesh = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_image = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_audio = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_gilrs = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_state = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_gltf = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_picking = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_color = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_a11y = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_internal = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_derive = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_ptr = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+bevy_tasks = { git = "https://github.com/bevyengine/bevy", tag = "v0.18.0" }
+
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in debug mode for dependencies.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+# Compile the entire crate as one unit.
+# Significantly slows compile times, marginal improvements.
+codegen-units = 1
+# Do a second optimization pass over the entire program, including dependencies.
+# Slightly slows compile times, marginal improvements.
+lto = "thin"
