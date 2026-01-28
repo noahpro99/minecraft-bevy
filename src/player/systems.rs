@@ -18,7 +18,7 @@ pub fn spawn_player(mut commands: Commands) {
             GlobalTransform::default(),
             Visibility::Visible,
             RigidBody::Dynamic,
-            Collider::cuboid(0.4, 0.9, 0.4),
+            Collider::cuboid(0.3, 0.9, 0.3),
             Friction::coefficient(0.0),
             LockedAxes::ROTATION_LOCKED,
             Ccd::enabled(),
@@ -169,7 +169,8 @@ pub fn player_move(
         if keyboard_input.pressed(KeyCode::ShiftLeft) {
             speed = 5.612;
         }
-        if keyboard_input.pressed(KeyCode::ControlLeft) {
+        let sneaking = keyboard_input.pressed(KeyCode::ControlLeft);
+        if sneaking {
             speed = controller.speed / 3.0;
         }
         let dt = time.delta_secs();
@@ -189,7 +190,28 @@ pub fn player_move(
             delta
         };
 
-        let next_velocity = current_velocity + change;
+        let mut next_velocity = current_velocity + change;
+
+        if sneaking && controller.is_grounded {
+            let next_position =
+                transform.translation + Vec3::new(next_velocity.x, 0.0, next_velocity.y) * dt;
+            let ray_origin = next_position + Vec3::new(0.0, 0.05, 0.0);
+            let ray_dir = -Vec3::Y;
+            let max_toi = 1.1;
+            let has_ground = rapier_context
+                .cast_ray(
+                    ray_origin,
+                    ray_dir,
+                    max_toi,
+                    true,
+                    QueryFilter::default().exclude_rigid_body(entity),
+                )
+                .is_some();
+            if !has_ground {
+                next_velocity = Vec2::ZERO;
+            }
+        }
+
         velocity.linvel.x = if next_velocity.x.abs() < 0.001 {
             0.0
         } else {
