@@ -1,5 +1,5 @@
 use crate::player::components::{
-    CameraController, CharacterController, Health, Inventory, PickupDrops, Player,
+    CameraController, CharacterController, Health, Hunger, Inventory, PickupDrops, Player,
 };
 use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
 use crate::world::resources::VoxelWorld;
@@ -14,6 +14,7 @@ pub fn spawn_player(mut commands: Commands) {
             CharacterController::default(),
             Inventory::default(),
             Health::default(),
+            Hunger::default(),
             PickupDrops,
             Transform::from_xyz(0.0, spawn_height(), 0.0),
             GlobalTransform::default(),
@@ -23,9 +24,9 @@ pub fn spawn_player(mut commands: Commands) {
             Friction::coefficient(0.0),
             LockedAxes::ROTATION_LOCKED,
             Ccd::enabled(),
-            TransformInterpolation::default(),
             Velocity::default(),
         ))
+        .insert(TransformInterpolation::default())
         .with_children(|parent| {
             parent.spawn((
                 Camera3d::default(),
@@ -128,7 +129,13 @@ pub fn player_look(
 pub fn player_move(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Fixed>>,
-    mut query: Query<(Entity, &Transform, &mut CharacterController, &mut Velocity)>,
+    mut query: Query<(
+        Entity,
+        &Transform,
+        &mut CharacterController,
+        &mut Velocity,
+        &mut Health,
+    )>,
     rapier_context: ReadRapierContext,
     settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
     command_state: Res<crate::player::inventory_ui::CommandState>,
@@ -143,7 +150,7 @@ pub fn player_move(
         }
     }
 
-    if let Ok((entity, transform, mut controller, mut velocity)) = query.single_mut() {
+    if let Ok((entity, transform, mut controller, mut velocity, mut health)) = query.single_mut() {
         let rapier_context = rapier_context.single().expect("No RapierContext found");
         let rotation = transform.rotation;
         let forward = rotation * Vec3::NEG_Z;
@@ -225,6 +232,7 @@ pub fn player_move(
         };
 
         // Ground check using Rapier raycast
+        let was_grounded = controller.is_grounded;
         let ray_pos = transform.translation;
         let ray_dir = -Vec3::Y;
         let max_toi = 1.05;
@@ -242,6 +250,19 @@ pub fn player_move(
             }
         }
 
+        if was_grounded && !controller.is_grounded {
+            controller.fall_start_y = transform.translation.y;
+        }
+
+        if !was_grounded && controller.is_grounded {
+            let fall_distance = controller.fall_start_y - transform.translation.y;
+            if fall_distance > 3.0 {
+                let damage = (fall_distance - 3.0).floor() as i32;
+                health.current = (health.current - damage).max(0);
+            }
+            controller.fall_start_y = transform.translation.y;
+        }
+
         if controller.is_grounded && keyboard_input.pressed(KeyCode::Space) {
             velocity.linvel.y = controller.jump_force;
             controller.is_grounded = false;
@@ -251,6 +272,69 @@ pub fn player_move(
             velocity.linvel.y *= 0.98;
         }
     }
+}
+
+pub fn update_hunger(
+    time: Res<Time<Fixed>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&mut Hunger, &Velocity, &mut Health), With<Player>>,
+) {
+    let Ok((mut hunger, velocity, mut health)) = query.single_mut() else {
+        return;
+    };
+
+    let dt = time.delta_secs();
+    let moving = velocity.linvel.xz().length_squared() > 0.1;
+    let sprinting = keyboard_input.pressed(KeyCode::ShiftLeft) && moving;
+    let interval = if sprinting { 8.0 } else { 20.0 };
+
+    if hunger.current > 0 {
+        hunger.timer += dt;
+        if hunger.timer >= interval {
+            hunger.timer -= interval;
+            hunger.current = (hunger.current - 1).max(0);
+        }
+        hunger.damage_timer = 0.0;
+    } else {
+        hunger.damage_timer += dt;
+        if hunger.damage_timer >= 2.0 {
+            hunger.damage_timer -= 2.0;
+            health.current = (health.current - 1).max(0);
+        }
+    }
+}
+
+pub fn handle_player_death(
+    mut query: Query<
+        (
+            &mut Transform,
+            &mut Velocity,
+            &mut Health,
+            &mut Hunger,
+            &mut CharacterController,
+        ),
+        With<Player>,
+    >,
+) {
+    let Ok((mut transform, mut velocity, mut health, mut hunger, mut controller)) =
+        query.single_mut()
+    else {
+        return;
+    };
+
+    if health.current > 0 {
+        return;
+    }
+
+    health.current = health.max;
+    hunger.current = hunger.max;
+    hunger.timer = 0.0;
+    hunger.damage_timer = 0.0;
+    transform.translation = Vec3::new(0.0, spawn_height(), 0.0);
+    velocity.linvel = Vec3::ZERO;
+    controller.is_grounded = false;
+    controller.was_grounded = false;
+    controller.fall_start_y = transform.translation.y;
 }
 
 pub fn update_sprint_fov(

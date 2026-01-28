@@ -26,6 +26,7 @@ impl Plugin for PlayerPlugin {
                     player_inventory_control,
                     update_inventory_ui,
                     update_health_ui,
+                    update_hunger_ui,
                     handle_command_input,
                     pickup_drops,
                     toggle_settings_menu,
@@ -35,6 +36,14 @@ impl Plugin for PlayerPlugin {
                     update_sprint_fov,
                 ),
             )
-            .add_systems(FixedUpdate, (player_move, update_drop_items));
+            .add_systems(
+                FixedUpdate,
+                (
+                    player_move,
+                    update_drop_items,
+                    update_hunger,
+                    handle_player_death,
+                ),
+            );
     }
 }

@@ -1,5 +1,4 @@
-use crate::player::components::Health;
-use crate::player::components::{Inventory, InventorySlotIcon};
+use crate::player::components::{Health, Hunger, Inventory, InventorySlotIcon};
 use crate::player::settings_menu::{
     FovDecreaseButton, FovIncreaseButton, FovText, RenderDistanceDecreaseButton,
     RenderDistanceIncreaseButton, RenderDistanceText, ResumeButton, SettingsMenu,
@@ -23,6 +22,9 @@ pub struct Crosshair;
 
 #[derive(Component)]
 pub struct HealthText;
+
+#[derive(Component)]
+pub struct HungerText;
 
 #[derive(Resource, Default)]
 pub struct CommandState {
@@ -151,17 +153,14 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 
     commands
-        .spawn((
-            Node {
-                width: Val::Px(220.0),
-                height: Val::Px(30.0),
-                position_type: PositionType::Absolute,
-                left: Val::Px(12.0),
-                top: Val::Px(12.0),
-                ..default()
-            },
-            HealthText,
-        ))
+        .spawn((Node {
+            width: Val::Px(220.0),
+            height: Val::Px(30.0),
+            position_type: PositionType::Absolute,
+            left: Val::Px(12.0),
+            top: Val::Px(12.0),
+            ..default()
+        },))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("Health: 20/20"),
@@ -170,6 +169,28 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 0.4, 0.4)),
+                HealthText,
+            ));
+        });
+
+    commands
+        .spawn((Node {
+            width: Val::Px(220.0),
+            height: Val::Px(26.0),
+            position_type: PositionType::Absolute,
+            left: Val::Px(12.0),
+            top: Val::Px(40.0),
+            ..default()
+        },))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Hunger: 20/20"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.95, 0.8, 0.4)),
+                HungerText,
             ));
         });
 
@@ -714,4 +735,17 @@ pub fn update_health_ui(
         return;
     };
     text.0 = format!("Health: {}/{}", health.current, health.max);
+}
+
+pub fn update_hunger_ui(
+    hunger_query: Query<&Hunger>,
+    mut text_query: Query<&mut Text, With<HungerText>>,
+) {
+    let Ok(hunger) = hunger_query.single() else {
+        return;
+    };
+    let Ok(mut text) = text_query.single_mut() else {
+        return;
+    };
+    text.0 = format!("Hunger: {}/{}", hunger.current, hunger.max);
 }
