@@ -1,7 +1,7 @@
 use crate::player::components::{
     CameraController, CharacterController, Inventory, PickupDrops, Player,
 };
-use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType};
+use crate::world::components::{Chunk, DropItem, NeedsMeshUpdate, VoxelType, CHUNK_SIZE};
 use crate::world::resources::VoxelWorld;
 use crate::world::systems::{BlockAssets, InitialChunkMeshing};
 use bevy::prelude::*;
@@ -58,11 +58,24 @@ pub fn spawn_player_when_ready(
     mut commands: Commands,
     meshing: Res<InitialChunkMeshing>,
     players: Query<Entity, With<Player>>,
+    voxel_world: Res<VoxelWorld>,
+    chunk_colliders: Query<(), With<Collider>>,
 ) {
     if meshing.0 {
         return;
     }
     if !players.is_empty() {
+        return;
+    }
+
+    let spawn_pos = Vec3::new(0.0, spawn_height(), 0.0);
+    let spawn_chunk_pos = VoxelWorld::world_to_chunk_pos(spawn_pos);
+    let has_chunk = voxel_world
+        .chunks
+        .get(&spawn_chunk_pos)
+        .map(|entity| chunk_colliders.contains(*entity))
+        .unwrap_or(false);
+    if !has_chunk {
         return;
     }
 
@@ -349,6 +362,12 @@ pub fn player_interact(
                         if voxel != VoxelType::Air {
                             chunk.set_voxel(local_voxel_pos, VoxelType::Air);
                             commands.entity(chunk_entity).insert(NeedsMeshUpdate);
+                            mark_neighbor_chunks(
+                                &mut commands,
+                                &voxel_world,
+                                chunk_pos,
+                                local_voxel_pos,
+                            );
                             spawn_drop_item(&mut commands, &block_assets, world_voxel_pos, voxel);
                         }
                     } else if right_click {
@@ -378,6 +397,12 @@ pub fn player_interact(
 
                                 chunk.set_voxel(local_voxel_pos, selected_item);
                                 commands.entity(chunk_entity).insert(NeedsMeshUpdate);
+                                mark_neighbor_chunks(
+                                    &mut commands,
+                                    &voxel_world,
+                                    chunk_pos,
+                                    local_voxel_pos,
+                                );
 
                                 let slot = &mut inventory.slots[selected_slot];
                                 if slot.count > 0 {
@@ -421,6 +446,36 @@ fn spawn_drop_item(
         GlobalTransform::default(),
         Visibility::Visible,
     ));
+}
+
+fn mark_neighbor_chunks(
+    commands: &mut Commands,
+    voxel_world: &VoxelWorld,
+    chunk_pos: IVec3,
+    local_pos: IVec3,
+) {
+    let mut neighbors = Vec::new();
+    if local_pos.x == 0 {
+        neighbors.push(IVec3::new(-1, 0, 0));
+    } else if local_pos.x == CHUNK_SIZE as i32 - 1 {
+        neighbors.push(IVec3::new(1, 0, 0));
+    }
+    if local_pos.y == 0 {
+        neighbors.push(IVec3::new(0, -1, 0));
+    } else if local_pos.y == CHUNK_SIZE as i32 - 1 {
+        neighbors.push(IVec3::new(0, 1, 0));
+    }
+    if local_pos.z == 0 {
+        neighbors.push(IVec3::new(0, 0, -1));
+    } else if local_pos.z == CHUNK_SIZE as i32 - 1 {
+        neighbors.push(IVec3::new(0, 0, 1));
+    }
+
+    for offset in neighbors {
+        if let Some(entity) = voxel_world.chunks.get(&(chunk_pos + offset)) {
+            commands.entity(*entity).insert(NeedsMeshUpdate);
+        }
+    }
 }
 
 pub fn update_drop_items(
