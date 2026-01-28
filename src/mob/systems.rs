@@ -1,7 +1,7 @@
 use crate::mob::components::{Mob, MobBehavior, MobSpawner, MobState, MobType};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 fn get_terrain_height(x: f32, _z: f32) -> f32 {
     let base_height = 14.0;
@@ -42,14 +42,21 @@ pub fn spawn_mob(
         Transform::from_translation(position),
         Mob {
             mob_type,
-            health: if matches!(mob_type, MobType::Cow) {
+            max_speed: 2.0,
+            wander_timer: 0.0,
+            attack_cooldown: 0.0,
+        },
+        crate::player::components::Health {
+            current: if matches!(mob_type, MobType::Cow) {
                 10
             } else {
                 5
             },
-            max_speed: 2.0,
-            wander_timer: 0.0,
-            attack_cooldown: 0.0,
+            max: if matches!(mob_type, MobType::Cow) {
+                10
+            } else {
+                5
+            },
         },
         MobState::default(),
         RigidBody::Dynamic,
@@ -225,15 +232,14 @@ pub fn mob_movement_system(
     target_query: Query<&Transform>,
 ) {
     for (mob, state, transform, mut velocity) in mob_query.iter_mut() {
-        if state.state == MobBehavior::Love {
-            if let Some(target_e) = state.target_entity {
-                if let Ok(target_transform) = target_query.get(target_e) {
-                    let direction =
-                        (target_transform.translation - transform.translation).normalize_or_zero();
-                    velocity.linvel = direction * mob.max_speed;
-                    continue;
-                }
-            }
+        if state.state == MobBehavior::Love
+            && let Some(target_e) = state.target_entity
+            && let Ok(target_transform) = target_query.get(target_e)
+        {
+            let direction =
+                (target_transform.translation - transform.translation).normalize_or_zero();
+            velocity.linvel = direction * mob.max_speed;
+            continue;
         }
 
         // Simple wandering movement using physics

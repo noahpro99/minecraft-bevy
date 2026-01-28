@@ -1,7 +1,7 @@
 use bevy::audio::AudioSource;
 use bevy::prelude::*;
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct SoundAssets {
     pub break_grass: Handle<AudioSource>,
     pub break_stone: Handle<AudioSource>,
@@ -10,20 +10,6 @@ pub struct SoundAssets {
     pub step_grass: Handle<AudioSource>,
     pub step_stone: Handle<AudioSource>,
     pub step_dirt: Handle<AudioSource>,
-}
-
-impl Default for SoundAssets {
-    fn default() -> Self {
-        Self {
-            break_grass: Handle::default(),
-            break_stone: Handle::default(),
-            place_block: Handle::default(),
-            pickup_item: Handle::default(),
-            step_grass: Handle::default(),
-            step_stone: Handle::default(),
-            step_dirt: Handle::default(),
-        }
-    }
 }
 
 pub fn load_sound_assets(mut commands: Commands, asset_server: Res<AssetServer>) {

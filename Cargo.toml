@@ -4,33 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.18.0", default-features = false, features = [
-    "bevy_core_pipeline",
-    "bevy_pbr",
-    "bevy_gltf",
-    "bevy_render",
-    "bevy_sprite",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_ui_render",
-    "bevy_winit",
-    "bevy_asset",
-    "bevy_scene",
-    "bevy_gizmos",
-    "bevy_audio",
-    "bevy_gilrs",
-    "bevy_state",
-    "bevy_log",
-    "vorbis",
-    "multi_threaded",
-    "wayland",
-    "png",
-    "hdr",
-    "zstd_rust",
-    "default_font",
-    "tonemapping_luts",
-    "dynamic_linking",
-] }
+bevy = { version = "0.18.0" }
 bevy_rapier3d = { git = "https://github.com/Buncys/bevy_rapier", branch = "bevy-0.18.0" }
 home = "0.5.12"
 noise = "0.9.0"

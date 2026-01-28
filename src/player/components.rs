@@ -44,7 +44,6 @@ pub struct CameraController {
 pub struct CharacterController {
     pub speed: f32,
     pub jump_force: f32,
-    pub velocity: Vec3,
     pub is_grounded: bool,
     pub was_grounded: bool,
     pub fall_start_y: f32,
@@ -55,7 +54,6 @@ impl Default for CharacterController {
         Self {
             speed: 4.317,
             jump_force: 9.6,
-            velocity: Vec3::ZERO,
             is_grounded: false,
             was_grounded: false,
             fall_start_y: 0.0,

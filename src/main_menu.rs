@@ -1,5 +1,4 @@
 use bevy::input::keyboard::KeyboardInput;
-use bevy::log;
 use bevy::prelude::*;
 use bevy::window::CursorOptions;
 use serde::{Deserialize, Serialize};
@@ -39,8 +38,9 @@ impl Plugin for MainMenuPlugin {
             .add_systems(OnEnter(AppState::MainMenu), setup_main_menu)
             .add_systems(
                 Update,
-                (handle_buttons, handle_input).run_if(in_state(AppState::MainMenu)),
+                (handle_buttons,).run_if(in_state(AppState::MainMenu)),
             )
+            .add_systems(Update, (handle_input,).run_if(in_state(AppState::MainMenu)))
             .add_systems(OnExit(AppState::MainMenu), cleanup_main_menu)
             .add_systems(
                 OnExit(AppState::InGame),
@@ -88,7 +88,7 @@ fn setup_main_menu(
         cursor.visible = true;
     }
 
-    commands.spawn((Camera2d::default(), MainMenuRoot));
+    commands.spawn((Camera2d, MainMenuRoot));
     commands
         .spawn((
             Node {
@@ -299,41 +299,74 @@ fn cleanup_main_menu(mut commands: Commands, query: Query<Entity, With<MainMenuR
     }
 }
 
+type InteractionQuery<'a, 'b> = Query<
+    'a,
+    'b,
+    (&'static Interaction, &'static MenuButton),
+    (Changed<Interaction>, With<Button>),
+>;
+
 fn handle_buttons(
     mut next_state: ResMut<NextState<AppState>>,
     mut world_settings: ResMut<WorldSettings>,
-    mut interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    interaction_query: InteractionQuery,
     input_query: Query<&Children, With<WorldNameInput>>,
     seed_query: Query<&Children, With<WorldSeedInput>>,
     text_query: Query<&Text>,
 ) {
-    for (interaction, button) in interaction_query.iter_mut() {
+    for (interaction, button) in interaction_query.iter() {
         if *interaction == Interaction::Pressed {
             match button {
                 MenuButton::Create => {
                     let mut name = String::new();
                     let mut seed = rand::random::<u64>();
 
-                    if let Ok(children) = input_query.single() {
-                        if let Ok(text) = text_query.get(children[0]) {
-                            name = text.0.trim().to_string();
-                        }
+                    if let (Ok(_), Ok(text)) = (
+                        input_query.single(),
+                        input_query.single().map(|c| {
+                            text_query
+                                .get(c[0])
+                                .expect("Input field missing text child")
+                        }),
+                    ) {
+                        name = text.0.trim().to_string();
                     }
 
-                    if let Ok(children) = seed_query.single() {
-                        if let Ok(text) = text_query.get(children[0]) {
-                            let seed_str = text.0.trim();
-                            if !seed_str.is_empty() {
-                                if let Ok(s) = seed_str.parse::<u64>() {
-                                    seed = s;
-                                } else {
-                                    // Use hash of string if not a number
-                                    use std::collections::hash_map::DefaultHasher;
-                                    use std::hash::{Hash, Hasher};
-                                    let mut hasher = DefaultHasher::new();
-                                    seed_str.hash(&mut hasher);
-                                    seed = hasher.finish();
-                                }
+                    if let (Ok(_), Ok(text)) = (
+                        seed_query.single(),
+                        seed_query
+                            .single()
+                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
+                    ) {
+                        name = text.0.trim().to_string();
+                    }
+
+                    if let (Ok(_), Ok(text)) = (
+                        seed_query.single(),
+                        seed_query
+                            .single()
+                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
+                    ) {
+                        name = text.0.trim().to_string();
+                    }
+
+                    if let (Ok(_), Ok(text)) = (
+                        seed_query.single(),
+                        seed_query
+                            .single()
+                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
+                    ) {
+                        let seed_str = text.0.trim();
+                        if !seed_str.is_empty() {
+                            if let Ok(s) = seed_str.parse::<u64>() {
+                                seed = s;
+                            } else {
+                                // Use hash of string if not a number
+                                use std::collections::hash_map::DefaultHasher;
+                                use std::hash::{Hash, Hasher};
+                                let mut hasher = DefaultHasher::new();
+                                seed_str.hash(&mut hasher);
+                                seed = hasher.finish();
                             }
                         }
                     }
@@ -341,9 +374,10 @@ fn handle_buttons(
                     if !name.is_empty() {
                         if get_worlds().unwrap_or_default().contains(&name) {
                             // TODO: Add UI error message
-                            log::error!("World with name '{}' already exists", name);
-                            return;
+                            error!("World with name '{}' already exists", name);
+                            continue;
                         }
+
                         world_settings.name = name;
                         world_settings.seed = seed;
                         world_settings.inventory = None;
@@ -365,6 +399,9 @@ fn handle_buttons(
 #[derive(Component)]
 pub struct FocusedInput;
 
+type InputInteractionQuery<'a, 'b> =
+    Query<'a, 'b, (Entity, &'static Interaction), (With<Node>, Changed<Interaction>)>;
+
 fn handle_input(
     mut commands: Commands,
     mut char_events: MessageReader<KeyboardInput>,
@@ -373,7 +410,7 @@ fn handle_input(
     focused_query: Query<Entity, With<FocusedInput>>,
     mut text_query: Query<&mut Text>,
     _mouse_input: Res<ButtonInput<MouseButton>>,
-    interaction_query: Query<(Entity, &Interaction), (With<Node>, Changed<Interaction>)>,
+    interaction_query: InputInteractionQuery,
 ) {
     use bevy::input::keyboard::Key;
 
@@ -391,29 +428,22 @@ fn handle_input(
         }
     }
 
-    if let Ok(focused_entity) =
-        focused_query.get(focused_query.iter().next().unwrap_or(Entity::PLACEHOLDER))
+    if let Some((_focused_entity, children)) = focused_query.single().ok().and_then(|e| {
+        input_query
+            .get(e)
+            .ok()
+            .map(|(_, c)| (e, c))
+            .or_else(|| seed_query.get(e).ok().map(|(_, c)| (e, c)))
+    }) && let Ok(mut text) = text_query.get_mut(children[0])
     {
-        let children = if let Ok((_, children)) = input_query.get(focused_entity) {
-            Some(children)
-        } else if let Ok((_, children)) = seed_query.get(focused_entity) {
-            Some(children)
-        } else {
-            None
-        };
-
-        if let Some(children) = children {
-            if let Ok(mut text) = text_query.get_mut(children[0]) {
-                for event in char_events.read() {
-                    if !event.state.is_pressed() {
-                        continue;
-                    }
-                    if let Key::Character(c) = &event.logical_key {
-                        text.0.push_str(c.as_str());
-                    } else if event.key_code == KeyCode::Backspace {
-                        text.0.pop();
-                    }
-                }
+        for event in char_events.read() {
+            if !event.state.is_pressed() {
+                continue;
+            }
+            if let Key::Character(c) = &event.logical_key {
+                text.0.push_str(c.as_str());
+            } else if event.key_code == KeyCode::Backspace {
+                text.0.pop();
             }
         }
     }
@@ -432,10 +462,13 @@ fn get_worlds() -> Result<Vec<String>, std::io::Error> {
     let mut worlds = Vec::new();
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
-        if entry.path().is_dir() {
-            if let Some(name) = entry.file_name().to_str() {
-                worlds.push(name.to_string());
-            }
+        if let Some(name) = entry
+            .path()
+            .is_dir()
+            .then(|| entry.file_name())
+            .and_then(|n| n.to_str().map(|s| s.to_string()))
+        {
+            worlds.push(name);
         }
     }
     Ok(worlds)

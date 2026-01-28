@@ -72,26 +72,26 @@ pub fn toggle_settings_menu(
     settings: Res<Settings>,
     mut window_query: Query<(Entity, &mut Window, &mut CursorOptions)>,
 ) {
-    if key.just_pressed(KeyCode::Escape) {
-        if let Ok(mut visibility) = settings_menu_query.single_mut() {
-            if *visibility == Visibility::Hidden {
-                *visibility = Visibility::Visible;
+    if key.just_pressed(KeyCode::Escape)
+        && let Ok(mut visibility) = settings_menu_query.single_mut()
+    {
+        if *visibility == Visibility::Hidden {
+            *visibility = Visibility::Visible;
 
-                // Release cursor
-                if let Ok((_, _, mut cursor)) = window_query.single_mut() {
-                    cursor.grab_mode = bevy::window::CursorGrabMode::None;
-                    cursor.visible = true;
-                }
-
-                // Apply current FOV to camera
-                for mut projection in cameras.iter_mut() {
-                    if let Projection::Perspective(perspective) = &mut *projection {
-                        perspective.fov = settings.fov.to_radians();
-                    }
-                }
-            } else {
-                *visibility = Visibility::Hidden;
+            // Release cursor
+            if let Ok((_, _, mut cursor)) = window_query.single_mut() {
+                cursor.grab_mode = bevy::window::CursorGrabMode::None;
+                cursor.visible = true;
             }
+
+            // Apply current FOV to camera
+            for mut projection in cameras.iter_mut() {
+                if let Projection::Perspective(perspective) = &mut *projection {
+                    perspective.fov = settings.fov.to_radians();
+                }
+            }
+        } else {
+            *visibility = Visibility::Hidden;
         }
     }
 }

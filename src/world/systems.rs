@@ -9,12 +9,13 @@ use noise::{NoiseFn, Perlin};
 
 use crate::main_menu::WorldSettings;
 use crate::player::settings_menu::Settings;
-use crate::world::components::{
-    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
-};
 use crate::world::VoxelWorld;
+use crate::world::components::{
+    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+};
 
 #[derive(Component)]
+#[allow(dead_code)]
 pub struct Block;
 
 #[derive(Resource)]
@@ -74,7 +75,9 @@ pub fn spawn_chunks_around_player(
             for z in -view_distance..=view_distance {
                 let chunk_key = IVec3::new(player_chunk_pos.x + x, y, player_chunk_pos.z + z);
 
-                if !voxel_world.chunks.contains_key(&chunk_key) {
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    voxel_world.chunks.entry(chunk_key)
+                {
                     let chunk_data =
                         generate_chunk(chunk_key, base_height, amplitude, frequency, &perlin);
 
@@ -90,7 +93,7 @@ pub fn spawn_chunks_around_player(
                             crate::world::components::InGameEntity,
                         ))
                         .id();
-                    voxel_world.chunks.insert(chunk_key, entity);
+                    e.insert(entity);
 
                     let neighbors = [
                         IVec3::new(1, 0, 0),
@@ -108,7 +111,7 @@ pub fn spawn_chunks_around_player(
                     }
 
                     spawned += 1;
-                    if spawned >= MAX_CHUNKS_PER_FRAME {
+                    if spawned == MAX_CHUNKS_PER_FRAME {
                         return;
                     }
                 }
@@ -170,6 +173,7 @@ pub fn reset_voxel_world(mut voxel_world: ResMut<VoxelWorld>) {
     voxel_world.chunks.clear();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_chunk_mesh(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -191,12 +195,10 @@ pub fn update_chunk_mesh(
     } else {
         MAX_MESH_UPDATES_PER_FRAME
     };
-    let mut processed = 0;
-    for (entity, chunk, chunk_pos, existing_mesh) in query.iter() {
+    for (processed, (entity, chunk, chunk_pos, existing_mesh)) in query.iter().enumerate() {
         if processed >= limit {
             break;
         }
-        processed += 1;
         log::info!("Updating mesh for chunk entity: {:?}", entity);
 
         #[derive(Default)]
@@ -504,7 +506,7 @@ pub fn update_chunk_mesh(
                                     grass_side.add_face(face, normal);
                                 }
                             } else {
-                                let mut buffers = match voxel {
+                                let buffers = match voxel {
                                     VoxelType::Dirt => Some(&mut dirt),
                                     VoxelType::Stone => Some(&mut stone),
                                     VoxelType::CoalOre => Some(&mut coal_ore),
@@ -517,7 +519,7 @@ pub fn update_chunk_mesh(
                                     }
                                 };
 
-                                if let Some(buffers) = buffers.as_deref_mut() {
+                                if let Some(buffers) = buffers {
                                     buffers.add_face(face, normal);
                                 }
                             }

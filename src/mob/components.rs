@@ -3,14 +3,14 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Mob {
     pub mob_type: MobType,
-    pub health: i32,
     pub max_speed: f32,
     pub wander_timer: f32,
     pub attack_cooldown: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum MobType {
+    #[default]
     Cow,
     Slime,
 }
@@ -27,9 +27,9 @@ pub struct MobState {
 pub enum MobBehavior {
     Idle,
     Wandering,
-    Attacking,
     Love,
     Parent, // Just gave birth
+    Attacking,
 }
 
 impl Default for MobState {
@@ -40,12 +40,6 @@ impl Default for MobState {
             target_entity: None,
             contact_timer: 0.0,
         }
-    }
-}
-
-impl Default for MobType {
-    fn default() -> Self {
-        Self::Cow
     }
 }
 

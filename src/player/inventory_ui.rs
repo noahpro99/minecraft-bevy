@@ -5,12 +5,13 @@ use crate::player::settings_menu::{
     MasterVolumeIncreaseButton, MasterVolumeText, QuitToMenuButton, RenderDistanceDecreaseButton,
     RenderDistanceIncreaseButton, RenderDistanceText, ResumeButton, SettingsMenu,
 };
-use crate::world::components::ItemType;
+use crate::world::components::{ItemType, SunLight};
 use bevy::image::{ImageLoaderSettings, ImageSampler, TRANSPARENT_IMAGE_HANDLE};
-use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 
 #[derive(Component)]
+#[allow(dead_code)]
 pub struct InventoryBar;
 
 #[derive(Component)]
@@ -63,6 +64,7 @@ pub struct InventoryIconAssets {
 pub struct HotbarRoot;
 
 #[derive(Component)]
+#[allow(dead_code)]
 pub struct InventoryRoot;
 
 pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -781,102 +783,72 @@ pub fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 pub fn handle_command_input(
     mut command_state: ResMut<CommandState>,
-    mut text_queries: ParamSet<(
+    mut text_params: ParamSet<(
         Query<&mut Text, With<CommandInputText>>,
         Query<&mut Text, With<CommandHistoryText>>,
     )>,
-    mut visibility_queries: ParamSet<(
-        Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
+    mut visibility_params: ParamSet<(
+        Query<&Visibility, With<SettingsMenu>>,
         Query<&mut Visibility, With<CommandInputRoot>>,
         Query<&mut Visibility, With<CommandHistoryRoot>>,
     )>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut char_events: MessageReader<KeyboardInput>,
-    key_input: Res<ButtonInput<KeyCode>>,
-    mut sun_query: Query<
-        (&mut Transform, &mut DirectionalLight),
-        With<crate::world::components::SunLight>,
-    >,
+    _mouse: Res<ButtonInput<KeyCode>>,
+    mut sun_query: Query<(&mut Transform, &mut DirectionalLight), With<SunLight>>,
 ) {
-    if let Ok(visibility) = visibility_queries.p0().single() {
-        if *visibility != Visibility::Hidden {
-            return;
-        }
+    if let Ok(visibility) = visibility_params.p0().single()
+        && *visibility != Visibility::Hidden
+    {
+        return;
     }
 
-    let mut ignore_slash = false;
-    if !command_state.open && key_input.just_pressed(KeyCode::Slash) {
+    if keyboard_input.just_pressed(KeyCode::Slash) && !command_state.open {
         command_state.open = true;
         command_state.buffer.clear();
-        command_state.buffer.push('/');
-        ignore_slash = true;
+        if let Ok(mut visibility) = visibility_params.p1().single_mut() {
+            *visibility = Visibility::Visible;
+        }
+        if let Ok(mut visibility) = visibility_params.p2().single_mut() {
+            *visibility = Visibility::Visible;
+        }
     }
 
     if !command_state.open {
         return;
     }
 
-    if key_input.just_pressed(KeyCode::Escape) {
+    if keyboard_input.just_pressed(KeyCode::Enter) {
+        let command = command_state.buffer.clone();
+        command_state.history.push(command.clone());
         command_state.open = false;
-        command_state.buffer.clear();
-    }
-
-    if key_input.just_pressed(KeyCode::Backspace) {
-        command_state.buffer.pop();
-        if command_state.buffer.is_empty() {
-            command_state.buffer.push('/');
+        if let Ok(mut visibility) = visibility_params.p1().single_mut() {
+            *visibility = Visibility::Hidden;
         }
+        let response = execute_command(&command, &mut sun_query);
+        command_state.history.push(format!("[System] {}", response));
     }
 
-    if key_input.just_pressed(KeyCode::Enter) {
-        let result = execute_command(&command_state.buffer, &mut sun_query);
-        command_state.history.push(result);
-        if command_state.history.len() > 6 {
-            command_state.history.remove(0);
+    for event in char_events.read() {
+        if !event.state.is_pressed() {
+            continue;
         }
-        command_state.open = false;
-        command_state.buffer.clear();
-    }
-
-    if key_input.just_pressed(KeyCode::Space) {
-        command_state.buffer.push(' ');
-    }
-
-    if command_state.open {
-        for event in char_events.read() {
-            if !event.state.is_pressed() {
-                continue;
-            }
-            if let Key::Character(character) = &event.logical_key {
-                if character.is_empty() {
-                    continue;
-                }
-                if ignore_slash && character == "/" {
-                    continue;
-                }
-                command_state.buffer.push_str(character);
+        if let bevy::input::keyboard::Key::Character(c) = &event.logical_key {
+            command_state.buffer.push_str(c.as_str());
+        } else if event.key_code == KeyCode::Backspace {
+            command_state.buffer.pop();
+        } else if event.key_code == KeyCode::Escape {
+            command_state.open = false;
+            if let Ok(mut visibility) = visibility_params.p1().single_mut() {
+                *visibility = Visibility::Hidden;
             }
         }
     }
 
-    if let Ok(mut visibility) = visibility_queries.p1().single_mut() {
-        *visibility = if command_state.open {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+    if let Ok(mut text) = text_params.p0().single_mut() {
+        text.0 = format!("> {}", command_state.buffer);
     }
-    if let Ok(mut visibility) = visibility_queries.p2().single_mut() {
-        *visibility = if command_state.open {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-
-    if let Ok(mut text) = text_queries.p0().single_mut() {
-        text.0 = command_state.buffer.clone();
-    }
-    if let Ok(mut text) = text_queries.p1().single_mut() {
+    if let Ok(mut text) = text_params.p1().single_mut() {
         text.0 = command_state.history.join("\n");
     }
 }
