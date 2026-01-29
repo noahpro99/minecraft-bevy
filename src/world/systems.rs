@@ -9,10 +9,10 @@ use noise::{NoiseFn, Perlin};
 
 use crate::main_menu::WorldSettings;
 use crate::player::settings_menu::Settings;
-use crate::world::VoxelWorld;
 use crate::world::components::{
-    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
 };
+use crate::world::VoxelWorld;
 
 #[derive(Component)]
 #[allow(dead_code)]
@@ -44,6 +44,8 @@ const WORLD_MAX_Y: i32 = 96;
 
 pub fn spawn_chunks_around_player(
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut voxel_world: ResMut<VoxelWorld>,
     player_query: Query<&Transform, With<crate::player::components::Player>>,
     settings: Res<Settings>,
@@ -94,6 +96,42 @@ pub fn spawn_chunks_around_player(
                         ))
                         .id();
                     e.insert(entity);
+
+                    // Check for cow spawn hotspots in this chunk
+                    let mut rng = rand::thread_rng();
+                    let freq = 0.05;
+                    let seed = world_settings.seed as f32;
+
+                    // Sample the center of the chunk for the hotspot
+                    let sample_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
+                    let sample_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
+                    let hotspot =
+                        ((sample_x * freq + seed).sin() + (sample_z * freq + seed).cos()) > 0.4;
+
+                    if hotspot {
+                        // Spawn a group of cows
+                        for _ in 0..rand::Rng::gen_range(&mut rng, 5..12) {
+                            let ox = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
+                            let oz = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
+                            let world_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + ox;
+                            let world_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + oz;
+
+                            // Estimate height (could use generate_chunk but let's keep it simple for now)
+                            let noise_val = perlin.get([
+                                world_x as f64 * frequency as f64,
+                                world_z as f64 * frequency as f64,
+                            ]);
+                            let height = (base_height + noise_val as f32 * amplitude).round();
+
+                            crate::mob::systems::spawn_mob_typed(
+                                &mut commands,
+                                &mut meshes,
+                                &mut materials,
+                                Vec3::new(world_x, height + 1.0, world_z),
+                                crate::mob::components::MobType::Cow,
+                            );
+                        }
+                    }
 
                     let neighbors = [
                         IVec3::new(1, 0, 0),
@@ -757,6 +795,39 @@ pub fn update_chunk_mesh(
     }
 }
 
+pub fn update_game_time(
+    time: Res<Time>,
+    mut game_time: ResMut<crate::world::components::GameTime>,
+    mut sun_query: Query<(&mut Transform, &mut DirectionalLight), With<SunLight>>,
+) {
+    let dt = time.delta_secs();
+    game_time.time += dt / game_time.day_length_seconds;
+    if game_time.time >= 1.0 {
+        game_time.time -= 1.0;
+    }
+
+    if let Ok((mut transform, mut light)) = sun_query.single_mut() {
+        // Angle goes from 0 to 2*PI
+        let _angle = game_time.time * std::f32::consts::TAU;
+
+        // Rotate sun around X axis
+        // We want 0.5 to be noon (sun overhead)
+        // angle_adjusted = (time - 0.25) * 2*PI
+        // at 0.5: angle = 0.25 * 2*PI = PI/2. sin(PI/2) = 1.0 (overhead)
+        let angle_adjusted = (game_time.time - 0.25) * std::f32::consts::TAU;
+        let sun_dir = Vec3::new(0.0, angle_adjusted.sin(), angle_adjusted.cos());
+        *transform = Transform::from_translation(sun_dir * 100.0).looking_at(Vec3::ZERO, Vec3::Y);
+
+        let sin_angle = angle_adjusted.sin();
+
+        // 0.0 to 1.0 based on height above horizon
+        let intensity = sin_angle.max(0.0);
+
+        // Day: 30000, Night: 100
+        light.illuminance = 100.0 + intensity * 29900.0;
+    }
+}
+
 pub fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -947,6 +1018,36 @@ pub fn setup_world(
                     ))
                     .id();
                 voxel_world.chunks.insert(chunk_key, entity);
+
+                // Check for cows in initial chunks
+                let mut rng = rand::thread_rng();
+                let freq = 0.05;
+                let seed = world_settings.seed as f32;
+                let sample_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
+                let sample_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
+                let hotspot =
+                    ((sample_x * freq + seed).sin() + (sample_z * freq + seed).cos()) > 0.4;
+
+                if hotspot {
+                    for _ in 0..rand::Rng::gen_range(&mut rng, 5..12) {
+                        let ox = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
+                        let oz = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
+                        let world_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + ox;
+                        let world_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + oz;
+                        let noise_val = perlin.get([
+                            world_x as f64 * frequency as f64,
+                            world_z as f64 * frequency as f64,
+                        ]);
+                        let height = (base_height + noise_val as f32 * amplitude).round();
+                        crate::mob::systems::spawn_mob_typed(
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            Vec3::new(world_x, height + 1.0, world_z),
+                            crate::mob::components::MobType::Cow,
+                        );
+                    }
+                }
             }
         }
     }

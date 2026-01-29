@@ -32,6 +32,21 @@ pub struct Chunk {
 #[derive(Component, Copy, Clone, Debug)]
 pub struct ChunkPosition(pub IVec3);
 
+#[derive(Resource)]
+pub struct GameTime {
+    pub time: f32, // 0.0 to 1.0 (0.5 is noon, 0.0/1.0 is midnight)
+    pub day_length_seconds: f32,
+}
+
+impl Default for GameTime {
+    fn default() -> Self {
+        Self {
+            time: 0.5,
+            day_length_seconds: 600.0, // 10 minutes
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct SunLight;
 

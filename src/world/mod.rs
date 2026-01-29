@@ -7,7 +7,7 @@ pub mod systems;
 use resources::VoxelWorld;
 use systems::{
     apply_chunk_despawns, despawn_far_chunks, reset_voxel_world, setup_world,
-    spawn_chunks_around_player, update_chunk_mesh,
+    spawn_chunks_around_player, update_chunk_mesh, update_game_time,
 };
 
 pub struct WorldPlugin;
@@ -15,6 +15,7 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<VoxelWorld>()
+            .init_resource::<crate::world::components::GameTime>()
             .add_systems(
                 OnEnter(crate::main_menu::AppState::InGame),
                 (reset_voxel_world, setup_world).chain(),
@@ -26,6 +27,7 @@ impl Plugin for WorldPlugin {
                     despawn_far_chunks,
                     apply_chunk_despawns,
                     update_chunk_mesh,
+                    update_game_time,
                 )
                     .run_if(in_state(crate::main_menu::AppState::InGame)),
             );

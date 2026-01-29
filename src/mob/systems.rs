@@ -1,36 +1,31 @@
+use crate::main_menu::WorldSettings;
 use crate::mob::components::{Mob, MobBehavior, MobSpawner, MobState, MobType};
+use crate::player::components::{Health, Player};
+use crate::world::components::{GameTime, InGameEntity};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
-fn get_terrain_height(x: f32, _z: f32) -> f32 {
+fn get_terrain_height(x: f32, z: f32) -> f32 {
     let base_height = 14.0;
     let amplitude = 8.0;
     let frequency = 0.04;
-    let wave = (x * frequency).sin()
-        + (x * frequency).cos()
-        + ((x * frequency * 0.5).sin() * 0.5)
-        + ((x * frequency * 0.5).cos() * 0.5);
+    // Simple approximation matching world generation
+    let wave = (x * frequency).sin() + (z * frequency).cos();
     let height = (base_height + wave * amplitude * 0.5).round();
     height + 1.0 // spawn on surface
 }
 
-pub fn spawn_mob(
+pub fn spawn_mob_typed(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
+    mob_type: MobType,
 ) {
-    let mut rng = thread_rng();
-    let mob_type = if rng.gen_bool(0.5) {
-        MobType::Cow
-    } else {
-        MobType::Slime
-    };
-
-    let (size, color) = match mob_type {
-        MobType::Cow => (Vec3::splat(0.6), Color::srgb(0.8, 0.6, 0.4)), // brown
-        MobType::Slime => (Vec3::splat(0.4), Color::srgb(0.2, 0.8, 0.2)), // green
+    let (size, color, health) = match mob_type {
+        MobType::Cow => (Vec3::splat(0.6), Color::srgb(0.8, 0.6, 0.4), 10), // brown
+        MobType::Slime => (Vec3::splat(0.4), Color::srgb(0.2, 0.8, 0.2), 5), // green
     };
 
     commands.spawn((
@@ -42,21 +37,17 @@ pub fn spawn_mob(
         Transform::from_translation(position),
         Mob {
             mob_type,
-            max_speed: 2.0,
+            max_speed: if matches!(mob_type, MobType::Slime) {
+                1.5
+            } else {
+                2.0
+            },
             wander_timer: 0.0,
             attack_cooldown: 0.0,
         },
-        crate::player::components::Health {
-            current: if matches!(mob_type, MobType::Cow) {
-                10
-            } else {
-                5
-            },
-            max: if matches!(mob_type, MobType::Cow) {
-                10
-            } else {
-                5
-            },
+        Health {
+            current: health,
+            max: health,
         },
         MobState::default(),
         RigidBody::Dynamic,
@@ -71,7 +62,23 @@ pub fn spawn_mob(
             combine_rule: CoefficientCombineRule::Min,
         },
         LockedAxes::ROTATION_LOCKED,
+        InGameEntity,
     ));
+}
+
+pub fn spawn_mob(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    position: Vec3,
+) {
+    let mut rng = thread_rng();
+    let mob_type = if rng.gen_bool(0.5) {
+        MobType::Cow
+    } else {
+        MobType::Slime
+    };
+    spawn_mob_typed(commands, meshes, materials, position, mob_type);
 }
 
 pub fn mob_spawner_system(
@@ -81,6 +88,9 @@ pub fn mob_spawner_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mob_query: Query<Entity, With<Mob>>,
+    player_query: Query<&Transform, With<Player>>,
+    game_time: Res<GameTime>,
+    world_settings: Res<WorldSettings>,
 ) {
     spawner.timer += time.delta_secs();
 
@@ -89,13 +99,48 @@ pub fn mob_spawner_system(
 
         let current_mobs = mob_query.iter().count();
         if current_mobs < spawner.max_mobs {
-            let mut rng = thread_rng();
-            let x = rng.gen_range(-20.0..20.0);
-            let z = rng.gen_range(-20.0..20.0);
-            let y = get_terrain_height(x, z);
-            let position = Vec3::new(x, y, z);
+            let player_pos = if let Ok(t) = player_query.single() {
+                t.translation
+            } else {
+                Vec3::ZERO
+            };
 
-            spawn_mob(&mut commands, &mut meshes, &mut materials, position);
+            let mut rng = thread_rng();
+            let angle = (game_time.time - 0.25) * std::f32::consts::TAU;
+            let is_night = angle.sin() <= 0.0;
+
+            // Try to spawn a mob at a distance from player
+            let spawn_dist = rng.gen_range(20.0..40.0);
+            let spawn_angle = rng.gen_range(0.0..std::f32::consts::TAU);
+            let spawn_x = player_pos.x + spawn_angle.cos() * spawn_dist;
+            let spawn_z = player_pos.z + spawn_angle.sin() * spawn_dist;
+            let spawn_y = get_terrain_height(spawn_x, spawn_z);
+            let position = Vec3::new(spawn_x, spawn_y, spawn_z);
+
+            if is_night && rng.gen_bool(0.9) {
+                spawn_mob_typed(&mut commands, &mut meshes, &mut materials, position, MobType::Slime);
+            } else {
+                let freq = 0.05;
+                let seed = world_settings.seed as f32;
+                let hotspot = ((spawn_x * freq + seed).sin() + (spawn_z * freq + seed).cos()) > 0.4;
+
+                if hotspot {
+                    for _ in 0..rng.gen_range(5..12) {
+                        let offset = Vec3::new(rng.gen_range(-5.0..5.0), 0.0, rng.gen_range(-5.0..5.0));
+                        let p = position + offset;
+                        let py = get_terrain_height(p.x, p.z);
+                        spawn_mob_typed(
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            Vec3::new(p.x, py, p.z),
+                            MobType::Cow,
+                        );
+                    }
+                } else if rng.gen_bool(0.4) {
+                    spawn_mob_typed(&mut commands, &mut meshes, &mut materials, position, MobType::Cow);
+                }
+            }
         }
     }
 }
@@ -222,7 +267,7 @@ pub fn mob_behavior_system(
     }
 
     for pos in to_spawn {
-        spawn_mob(&mut commands, &mut meshes, &mut materials, pos);
+        spawn_mob_typed(&mut commands, &mut meshes, &mut materials, pos, MobType::Cow);
     }
 }
 

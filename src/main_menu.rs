@@ -76,6 +76,7 @@ fn cleanup_in_game_entities(
 enum MenuButton {
     Create,
     Load(String),
+    Delete(String),
 }
 
 fn setup_main_menu(
@@ -265,27 +266,60 @@ fn setup_main_menu(
                     if let Ok(worlds) = get_worlds() {
                         for world in worlds {
                             parent
-                                .spawn((
-                                    Button,
-                                    Node {
-                                        width: Val::Px(250.0),
-                                        height: Val::Px(40.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                    MenuButton::Load(world.clone()),
-                                ))
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    column_gap: Val::Px(10.0),
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                })
                                 .with_children(|parent| {
-                                    parent.spawn((
-                                        Text::new(world),
-                                        TextFont {
-                                            font_size: 18.0,
-                                            ..default()
-                                        },
-                                        TextColor(Color::WHITE),
-                                    ));
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(250.0),
+                                                height: Val::Px(40.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                            MenuButton::Load(world.clone()),
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new(world.clone()),
+                                                TextFont {
+                                                    font_size: 18.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn((
+                                            Button,
+                                            Node {
+                                                width: Val::Px(40.0),
+                                                height: Val::Px(40.0),
+                                                justify_content: JustifyContent::Center,
+                                                align_items: AlignItems::Center,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.5, 0.2, 0.2)),
+                                            MenuButton::Delete(world),
+                                        ))
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Text::new("X"),
+                                                TextFont {
+                                                    font_size: 18.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::WHITE),
+                                            ));
+                                        });
                                 });
                         }
                     }
@@ -321,47 +355,23 @@ fn handle_buttons(
                     let mut name = String::new();
                     let mut seed = rand::random::<u64>();
 
-                    if let (Ok(_), Ok(text)) = (
-                        input_query.single(),
-                        input_query.single().map(|c| {
-                            text_query
-                                .get(c[0])
-                                .expect("Input field missing text child")
-                        }),
-                    ) {
-                        name = text.0.trim().to_string();
+                    if let Ok(children) = input_query.single() {
+                        if let Ok(text) = text_query.get(children[0]) {
+                            name = text.0.trim().to_string();
+                        }
                     }
 
-                    if let (Ok(_), Ok(text)) = (
-                        seed_query.single(),
-                        seed_query
-                            .single()
-                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
-                    ) {
-                        name = text.0.trim().to_string();
-                    }
+                    if let Ok(children) = seed_query.single() {
+                        let seed_str = if let Ok(text) = text_query.get(children[0]) {
+                            text.0.trim()
+                        } else {
+                            ""
+                        };
 
-                    if let (Ok(_), Ok(text)) = (
-                        seed_query.single(),
-                        seed_query
-                            .single()
-                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
-                    ) {
-                        name = text.0.trim().to_string();
-                    }
-
-                    if let (Ok(_), Ok(text)) = (
-                        seed_query.single(),
-                        seed_query
-                            .single()
-                            .map(|c| text_query.get(c[0]).expect("Seed field missing text child")),
-                    ) {
-                        let seed_str = text.0.trim();
                         if !seed_str.is_empty() {
                             if let Ok(s) = seed_str.parse::<u64>() {
                                 seed = s;
                             } else {
-                                // Use hash of string if not a number
                                 use std::collections::hash_map::DefaultHasher;
                                 use std::hash::{Hash, Hasher};
                                 let mut hasher = DefaultHasher::new();
@@ -371,24 +381,39 @@ fn handle_buttons(
                         }
                     }
 
-                    if !name.is_empty() {
-                        if get_worlds().unwrap_or_default().contains(&name) {
-                            // TODO: Add UI error message
-                            error!("World with name '{}' already exists", name);
-                            continue;
-                        }
-
-                        world_settings.name = name;
-                        world_settings.seed = seed;
-                        world_settings.inventory = None;
-                        save_world_settings(&world_settings);
-                        next_state.set(AppState::InGame);
+                    let mut name = name.trim().to_string();
+                    if name.is_empty() {
+                        name = "New World".to_string();
                     }
+
+                    let worlds = get_worlds().unwrap_or_default();
+                    if worlds.contains(&name) {
+                        let mut count = 1;
+                        let base_name = name.clone();
+                        while worlds.contains(&format!("{} ({})", base_name, count)) {
+                            count += 1;
+                        }
+                        name = format!("{} ({})", base_name, count);
+                    }
+
+                    world_settings.name = name;
+                    world_settings.seed = seed;
+                    world_settings.inventory = None;
+                    save_world_settings(&world_settings);
+                    next_state.set(AppState::InGame);
                 }
                 MenuButton::Load(name) => {
                     if let Ok(settings) = load_world_settings(name) {
                         *world_settings = settings;
                         next_state.set(AppState::InGame);
+                    }
+                }
+                MenuButton::Delete(name) => {
+                    let mut path = get_worlds_dir();
+                    path.push(name);
+                    if path.exists() {
+                        fs::remove_dir_all(path).ok();
+                        next_state.set(AppState::MainMenu); // Refresh
                     }
                 }
             }

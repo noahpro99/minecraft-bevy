@@ -54,8 +54,8 @@ impl Default for MobSpawner {
     fn default() -> Self {
         Self {
             timer: 0.0,
-            spawn_interval: 2.0,
-            max_mobs: 50,
+            spawn_interval: 1.0,
+            max_mobs: 100,
         }
     }
 }
