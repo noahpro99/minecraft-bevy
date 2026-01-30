@@ -31,6 +31,7 @@ pub struct BlockAssets {
     pub bedrock_material: Handle<StandardMaterial>,
     pub tall_grass_material: Handle<StandardMaterial>,
     pub wheat_material: Handle<StandardMaterial>,
+    pub destroy_stages: [Handle<StandardMaterial>; 10],
 }
 
 #[derive(Resource, Default)]
@@ -261,14 +262,15 @@ pub fn update_chunk_mesh(
         }
 
         impl MeshBuffers {
-            fn add_face(&mut self, vertices: [[f32; 3]; 4], normal: [f32; 3]) {
+            fn add_face(&mut self, vertices: [[f32; 3]; 4], _normal: [f32; 3]) {
                 let start_idx = self.positions.len() as u32;
                 for v in vertices {
                     self.positions.push(v);
-                    self.normals.push(normal);
                 }
+                self.normals
+                    .extend_from_slice(&[_normal, _normal, _normal, _normal]);
                 self.uvs
-                    .extend_from_slice(&[[0.0, 1.0], [0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]);
+                    .extend_from_slice(&[[1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0]]);
                 self.indices.extend_from_slice(&[
                     start_idx,
                     start_idx + 1,
@@ -812,6 +814,10 @@ pub fn update_game_time(
     time: Res<Time>,
     mut game_time: ResMut<crate::world::components::GameTime>,
     mut sun_query: Query<(&mut Transform, &mut DirectionalLight), With<SunLight>>,
+    mut celestial_query: Query<
+        (&mut Transform, &crate::world::components::CelestialBody),
+        Without<SunLight>,
+    >,
 ) {
     let dt = time.delta_secs();
     game_time.time += dt / game_time.day_length_seconds;
@@ -829,15 +835,39 @@ pub fn update_game_time(
         // at 0.5: angle = 0.25 * 2*PI = PI/2. sin(PI/2) = 1.0 (overhead)
         let angle_adjusted = (game_time.time - 0.25) * std::f32::consts::TAU;
         let sun_dir = Vec3::new(0.0, angle_adjusted.sin(), angle_adjusted.cos());
-        *transform = Transform::from_translation(sun_dir * 100.0).looking_at(Vec3::ZERO, Vec3::Y);
+        let distance = 100.0;
+
+        // Update sun position
+        let sun_pos = sun_dir * distance;
+        transform.translation = sun_pos;
+        transform.look_at(Vec3::ZERO, Vec3::Y);
 
         let sin_angle = angle_adjusted.sin();
 
         // 0.0 to 1.0 based on height above horizon
         let intensity = sin_angle.max(0.0);
 
-        // Day: 30000, Night: 100
-        light.illuminance = 100.0 + intensity * 29900.0;
+        // Day: 8000, Night: 100
+        light.illuminance = 100.0 + intensity * 7900.0;
+    }
+
+    // Update celestial bodies (sun and moon visuals)
+    for (mut transform, celestial) in celestial_query.iter_mut() {
+        let angle_adjusted = (game_time.time - 0.25) * std::f32::consts::TAU;
+        let distance = 90.0; // Distance from player
+
+        let sun_dir = Vec3::new(0.0, angle_adjusted.sin(), angle_adjusted.cos());
+
+        if celestial.is_moon {
+            // Moon is opposite to sun (180 degrees offset)
+            let moon_pos = -sun_dir * distance;
+            transform.translation = moon_pos;
+            transform.look_at(Vec3::ZERO, Vec3::Y);
+        } else {
+            let sun_pos = sun_dir * distance;
+            transform.translation = sun_pos;
+            transform.look_at(Vec3::ZERO, Vec3::Y);
+        }
     }
 }
 
@@ -917,10 +947,27 @@ pub fn setup_world(
             settings.sampler = ImageSampler::nearest();
         },
     );
+
+    let mut destroy_stages = Vec::new();
+    for i in 0..10 {
+        let texture = asset_server.load_with_settings(
+            format!("textures/block/destroy_stage_{}.png", i),
+            |settings: &mut ImageLoaderSettings| {
+                settings.sampler = ImageSampler::nearest();
+            },
+        );
+        destroy_stages.push(materials.add(StandardMaterial {
+            base_color_texture: Some(texture),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }));
+    }
+
     let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE));
     let grass_top_material = materials.add(StandardMaterial {
         base_color_texture: Some(grass_top_texture),
-        base_color: Color::WHITE,
+        base_color: Color::srgb(0.5, 0.8, 0.4),
         ..default()
     });
     let grass_side_material = materials.add(StandardMaterial {
@@ -965,7 +1012,7 @@ pub fn setup_world(
     });
     let tall_grass_material = materials.add(StandardMaterial {
         base_color_texture: Some(tall_grass_texture),
-        base_color: Color::WHITE,
+        base_color: Color::srgb(0.5, 0.8, 0.4),
         alpha_mode: AlphaMode::Mask(0.5),
         cull_mode: None,
         ..default()
@@ -991,16 +1038,59 @@ pub fn setup_world(
         bedrock_material,
         tall_grass_material,
         wheat_material,
+        destroy_stages: destroy_stages.try_into().unwrap(),
     });
 
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            illuminance: 2000.0,
+            illuminance: 8000.0,
             ..default()
         },
         Transform::from_xyz(80.0, 120.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
         SunLight,
+        crate::world::components::InGameEntity,
+    ));
+
+    // Spawn sun
+    let sun_material = materials.add(StandardMaterial {
+        base_color_texture: Some(asset_server.load_with_settings(
+            "textures/environment/celestial/sun.png",
+            |settings: &mut ImageLoaderSettings| {
+                settings.sampler = ImageSampler::nearest();
+            },
+        )),
+        alpha_mode: AlphaMode::Mask(0.5),
+        cull_mode: None,
+        unlit: true,
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(8.0, 8.0))),
+        MeshMaterial3d(sun_material),
+        Transform::from_scale(Vec3::new(1.0, 1.0, 1.0)),
+        crate::world::components::CelestialBody { is_moon: false },
+        crate::world::components::InGameEntity,
+    ));
+
+    // Spawn moon
+    let moon_material = materials.add(StandardMaterial {
+        base_color_texture: Some(asset_server.load_with_settings(
+            "textures/environment/celestial/moon/full_moon.png",
+            |settings: &mut ImageLoaderSettings| {
+                settings.sampler = ImageSampler::nearest();
+            },
+        )),
+        alpha_mode: AlphaMode::Mask(0.5),
+        cull_mode: None,
+        unlit: true,
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(8.0, 8.0))),
+        MeshMaterial3d(moon_material),
+        Transform::from_scale(Vec3::new(1.0, 1.0, 1.0)),
+        crate::world::components::CelestialBody { is_moon: true },
         crate::world::components::InGameEntity,
     ));
 

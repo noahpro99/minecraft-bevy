@@ -2,6 +2,16 @@ use crate::world::components::ItemType;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Component, Default)]
+pub struct MiningProgress {
+    pub target: Option<IVec3>,
+    pub progress: f32, // 0.0 to 1.0
+    pub timer: f32,    // timer for hit sounds
+}
+
+#[derive(Component)]
+pub struct DespawnMiningEffect;
+
 #[derive(Component)]
 pub struct Player;
 

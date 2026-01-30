@@ -1,7 +1,7 @@
 use crate::mob::components::{Mob, MobBehavior, MobState, MobType};
 use crate::player::components::{
-    CameraController, CharacterController, FootstepTimer, Health, Hunger, Inventory, PickupDrops,
-    Player,
+    CameraController, CharacterController, DespawnMiningEffect, FootstepTimer, Health, Hunger,
+    Inventory, MiningProgress, PickupDrops, Player,
 };
 use crate::player::resources::SoundAssets;
 use crate::player::settings_menu::Settings;
@@ -24,6 +24,7 @@ pub fn spawn_player(mut commands: Commands, world_settings: Res<crate::main_menu
         .spawn((
             Player,
             CharacterController::default(),
+            MiningProgress::default(),
             inventory,
             Health::default(),
             Hunger::default(),
@@ -422,6 +423,12 @@ pub fn player_inventory_control(
     }
 }
 
+pub fn despawn_mining_effects(mut commands: Commands, query: Query<Entity, With<DespawnMiningEffect>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 #[derive(SystemParam)]
 pub struct InteractionParams<'w, 's> {
     pub commands: Commands<'w, 's>,
@@ -434,6 +441,7 @@ pub struct InteractionParams<'w, 's> {
     pub sound_assets: Res<'w, SoundAssets>,
     pub settings: Res<'w, Settings>,
     pub inventory_query: Query<'w, 's, &'static mut Inventory, With<Player>>,
+    pub mining_query: Query<'w, 's, &'static mut MiningProgress, With<Player>>,
     pub player_query: Query<'w, 's, (Entity, &'static GlobalTransform), With<Player>>,
     pub settings_menu:
         Query<'w, 's, &'static Visibility, With<crate::player::settings_menu::SettingsMenu>>,
@@ -449,7 +457,7 @@ pub struct InteractionParams<'w, 's> {
     pub materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
-pub fn player_interact(mut params: InteractionParams) {
+pub fn player_interact(mut params: InteractionParams, time: Res<Time>) {
     let mut rng = rand::thread_rng();
     if let Ok(visibility) = params.settings_menu.single()
         && *visibility != Visibility::Hidden
@@ -458,9 +466,16 @@ pub fn player_interact(mut params: InteractionParams) {
     }
 
     let right_click = params.mouse_input.just_pressed(MouseButton::Right);
-    let left_click = params.mouse_input.just_pressed(MouseButton::Left);
+    let left_click_pressed = params.mouse_input.pressed(MouseButton::Left);
+    let _left_click_just_pressed = params.mouse_input.just_pressed(MouseButton::Left);
 
-    if !right_click && !left_click {
+    let Ok(mut mining_progress) = params.mining_query.single_mut() else {
+        return;
+    };
+
+    if !right_click && !left_click_pressed {
+        mining_progress.target = None;
+        mining_progress.progress = 0.0;
         return;
     }
 
@@ -496,13 +511,20 @@ pub fn player_interact(mut params: InteractionParams) {
 
             // Left click: remove block (aim slightly inside the block)
             // Right click: add block (aim slightly outside the block)
-            let (world_voxel_pos, target_entity) = if left_click {
+            let (world_voxel_pos, target_entity) = if left_click_pressed {
                 let p: Vec3 = hit_point + *ray_direction * 0.05;
                 (p.floor().as_ivec3(), target_entity)
             } else {
                 let p: Vec3 = hit_point - *ray_direction * 0.05;
                 (p.floor().as_ivec3(), target_entity)
             };
+
+            if left_click_pressed {
+                if mining_progress.target != Some(world_voxel_pos) {
+                    mining_progress.target = Some(world_voxel_pos);
+                    mining_progress.progress = 0.0;
+                }
+            }
 
             if right_click && let Ok(mut inventory) = params.inventory_query.single_mut() {
                 let selected_slot = inventory.selected_slot;
@@ -539,49 +561,109 @@ pub fn player_interact(mut params: InteractionParams) {
             if let Some(&chunk_entity) = params.voxel_world.chunks.get(&chunk_pos)
                 && let Ok(mut chunk) = params.chunk_query.get_mut(chunk_entity)
             {
-                if left_click {
+                if left_click_pressed {
                     let voxel = chunk.get_voxel(local_voxel_pos);
                     if voxel != VoxelType::Air && voxel != VoxelType::Bedrock {
-                        chunk.set_voxel(local_voxel_pos, VoxelType::Air);
-                        params.commands.entity(chunk_entity).insert(NeedsMeshUpdate);
-                        mark_neighbor_chunks(
-                            &mut params.commands,
-                            &params.voxel_world,
-                            chunk_pos,
-                            local_voxel_pos,
-                        );
+                        // Calculate mining speed
+                        let hardness = voxel.hardness();
+                        let tool_speed = 1.0; // Hand speed for now
+                        let multiplier = 1.5; // Correct tool multiplier is usually 1.5
 
-                        let drop_item_type = if voxel == VoxelType::TallGrass {
-                            use rand::Rng;
-                            if rng.gen_bool(0.1) {
-                                ItemType::Wheat
-                            } else {
-                                ItemType::None
-                            }
+                        // T = (Hardness * multiplier) / Speed
+                        let time_to_break = (hardness * multiplier) / tool_speed;
+
+                        if time_to_break <= 0.0 {
+                            mining_progress.progress = 1.0;
                         } else {
-                            match voxel {
-                                VoxelType::Grass => ItemType::GrassBlock,
-                                VoxelType::Dirt => ItemType::Dirt,
-                                VoxelType::Stone => ItemType::Stone,
-                                VoxelType::CoalOre => ItemType::CoalOre,
-                                VoxelType::IronOre => ItemType::IronOre,
-                                VoxelType::GoldOre => ItemType::GoldOre,
-                                VoxelType::DiamondOre => ItemType::DiamondOre,
-                                _ => ItemType::None,
-                            }
-                        };
-
-                        if drop_item_type != ItemType::None {
-                            spawn_drop_item(
-                                &mut params.commands,
-                                &params.block_assets,
-                                world_voxel_pos,
-                                drop_item_type,
-                            );
+                            mining_progress.progress += time.delta_secs() / time_to_break;
                         }
 
-                        if let Some(sound) = block_break_sound(voxel, &params.sound_assets) {
-                            play_sound(&mut params.commands, sound, params.settings.master_volume);
+                        if mining_progress.progress >= 1.0 {
+                            mining_progress.target = None;
+                            mining_progress.progress = 0.0;
+                            mining_progress.timer = 0.0;
+
+                            chunk.set_voxel(local_voxel_pos, VoxelType::Air);
+                            params.commands.entity(chunk_entity).insert(NeedsMeshUpdate);
+                            mark_neighbor_chunks(
+                                &mut params.commands,
+                                &params.voxel_world,
+                                chunk_pos,
+                                local_voxel_pos,
+                            );
+
+                            let drop_item_type = if voxel == VoxelType::TallGrass {
+                                use rand::Rng;
+                                if rng.gen_bool(0.1) {
+                                    ItemType::Wheat
+                                } else {
+                                    ItemType::None
+                                }
+                            } else {
+                                match voxel {
+                                    VoxelType::Grass => ItemType::GrassBlock,
+                                    VoxelType::Dirt => ItemType::Dirt,
+                                    VoxelType::Stone => ItemType::Stone,
+                                    VoxelType::CoalOre => ItemType::CoalOre,
+                                    VoxelType::IronOre => ItemType::IronOre,
+                                    VoxelType::GoldOre => ItemType::GoldOre,
+                                    VoxelType::DiamondOre => ItemType::DiamondOre,
+                                    _ => ItemType::None,
+                                }
+                            };
+
+                            if drop_item_type != ItemType::None {
+                                spawn_drop_item(
+                                    &mut params.commands,
+                                    &params.block_assets,
+                                    world_voxel_pos,
+                                    drop_item_type,
+                                );
+                            }
+
+                            if let Some(sound) = block_break_sound(voxel, &params.sound_assets) {
+                                play_sound(
+                                    &mut params.commands,
+                                    sound,
+                                    params.settings.master_volume,
+                                );
+                            }
+                        } else {
+                            // Play hit sound every 0.25s
+                            mining_progress.timer += time.delta_secs();
+                            if mining_progress.timer >= 0.25 {
+                                mining_progress.timer -= 0.25;
+                                use rand::Rng;
+                                let index = rng.gen_range(0..4);
+                                let sound = match voxel {
+                                    VoxelType::Grass | VoxelType::Dirt | VoxelType::TallGrass => {
+                                        Some(params.sound_assets.hit_grass[index].clone())
+                                    }
+                                    _ => Some(params.sound_assets.hit_stone[index].clone()),
+                                };
+                                if let Some(sound) = sound {
+                                    play_sound(
+                                        &mut params.commands,
+                                        sound,
+                                        params.settings.master_volume,
+                                    );
+                                }
+                            }
+
+                            // Render cracking texture
+                            let stage = (mining_progress.progress * 10.0).floor() as usize;
+                            let stage = stage.min(9);
+                            let material = params.block_assets.destroy_stages[stage].clone();
+
+                            params.commands.spawn((
+                                Mesh3d(params.block_assets.mesh.clone()),
+                                MeshMaterial3d(material),
+                                Transform::from_translation(world_voxel_pos.as_vec3() + 0.5)
+                                    .with_scale(Vec3::splat(1.001)),
+                                crate::world::components::InGameEntity,
+                                // Temporary entity that despawns next frame if not updated
+                                DespawnMiningEffect,
+                            ));
                         }
                     }
                 } else if right_click && let Ok(mut inventory) = params.inventory_query.single_mut()
@@ -663,7 +745,7 @@ fn spawn_drop_item(
         ItemType::GoldOre => block_assets.gold_ore_material.clone(),
         ItemType::DiamondOre => block_assets.diamond_ore_material.clone(),
         ItemType::Wheat => block_assets.wheat_material.clone(),
-        ItemType::None => return,
+        _ => block_assets.stone_material.clone(), // Fallback for tools/other items
     };
 
     let translation = voxel_pos.as_vec3() + Vec3::splat(0.5);

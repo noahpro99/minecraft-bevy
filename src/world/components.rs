@@ -50,6 +50,11 @@ impl Default for GameTime {
 #[derive(Component)]
 pub struct SunLight;
 
+#[derive(Component)]
+pub struct CelestialBody {
+    pub is_moon: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 pub enum ItemType {
     #[default]
@@ -102,6 +107,23 @@ impl Chunk {
             && pos.z < CHUNK_SIZE as i32
         {
             self.voxels[pos.x as usize][pos.y as usize][pos.z as usize] = voxel;
+        }
+    }
+}
+
+impl VoxelType {
+    pub fn hardness(&self) -> f32 {
+        match self {
+            VoxelType::Air => 0.0,
+            VoxelType::Grass => 0.6,
+            VoxelType::Dirt => 0.5,
+            VoxelType::Stone => 1.5,
+            VoxelType::CoalOre => 3.0,
+            VoxelType::IronOre => 3.0,
+            VoxelType::GoldOre => 3.0,
+            VoxelType::DiamondOre => 3.0,
+            VoxelType::Bedrock => -1.0, // Unbreakable
+            VoxelType::TallGrass => 0.0,
         }
     }
 }

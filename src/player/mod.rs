@@ -42,59 +42,24 @@ impl Plugin for PlayerPlugin {
             )
             .add_systems(
                 Update,
-                update_inventory_ui.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                update_health_ui.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                update_hunger_ui.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_command_input.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                pickup_drops.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                toggle_settings_menu.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_fov_buttons.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_render_distance_buttons.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_master_volume_buttons.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_footstep_volume_buttons.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_resume_button.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                handle_quit_button.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                update_sprint_fov.run_if(in_state(crate::main_menu::AppState::InGame)),
-            )
-            .add_systems(
-                Update,
-                update_footsteps.run_if(in_state(crate::main_menu::AppState::InGame)),
+                (
+                    update_inventory_ui,
+                    update_health_ui,
+                    update_hunger_ui,
+                    handle_command_input,
+                    pickup_drops,
+                    toggle_settings_menu,
+                    handle_fov_buttons,
+                    handle_render_distance_buttons,
+                    handle_master_volume_buttons,
+                    handle_footstep_volume_buttons,
+                    handle_resume_button,
+                    handle_quit_button,
+                    update_sprint_fov,
+                    update_footsteps,
+                    despawn_mining_effects,
+                )
+                    .run_if(in_state(crate::main_menu::AppState::InGame)),
             )
             .add_systems(
                 FixedUpdate,
