@@ -17,7 +17,9 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Settings>()
             .init_resource::<SoundAssets>()
+            .add_message::<KillEvent>()
             .add_systems(
+
                 OnEnter(crate::main_menu::AppState::InGame),
                 (setup_ui, load_sound_assets),
             )
@@ -52,7 +54,7 @@ impl Plugin for PlayerPlugin {
             )
             .add_systems(
                 Update,
-                (handle_command_input,).run_if(in_state(crate::main_menu::AppState::InGame)),
+                handle_command_input.run_if(in_state(crate::main_menu::AppState::InGame)),
             )
             .add_systems(
                 Update,

@@ -8,7 +8,7 @@ pub struct Mob {
     pub attack_cooldown: f32,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum MobType {
     #[default]
     Cow,
@@ -47,7 +47,7 @@ impl Default for MobState {
 pub struct MobSpawner {
     pub timer: f32,
     pub spawn_interval: f32,
-    pub max_mobs: usize,
+    pub global_cap: usize,
 }
 
 impl Default for MobSpawner {
@@ -55,7 +55,7 @@ impl Default for MobSpawner {
         Self {
             timer: 0.0,
             spawn_interval: 1.0,
-            max_mobs: 100,
+            global_cap: 100,
         }
     }
 }

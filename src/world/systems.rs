@@ -1,6 +1,5 @@
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageLoaderSettings, ImageSampler};
-use bevy::log;
 use bevy::mesh::Indices;
 use bevy::prelude::*;
 use bevy::render::render_resource::PrimitiveTopology;
@@ -97,39 +96,53 @@ pub fn spawn_chunks_around_player(
                         .id();
                     e.insert(entity);
 
-                    // Check for cow spawn hotspots in this chunk
-                    let mut rng = rand::thread_rng();
-                    let freq = 0.05;
-                    let seed = world_settings.seed as f32;
+                    // Hash-based cow spawning for localized herds
+                    let cow_spawn_chance = {
+                        let mut has_cow = false;
+                        // Check the current chunk and its immediate neighbors (1 chunk radius)
+                        for dx in -1..=1 {
+                            for dz in -1..=1 {
+                                let nx = chunk_key.x + dx;
+                                let nz = chunk_key.z + dz;
+                                // Deterministic hash for "Cow Source" chunks (0.4% chance)
+                                let hash = (nx as i64 * 734287 ^ nz as i64 * 1237).abs();
+                                if hash % 1000 < 4 {
+                                    has_cow = true;
+                                    break;
+                                }
+                            }
+                            if has_cow {
+                                break;
+                            }
+                        }
+                        has_cow
+                    };
 
-                    // Sample the center of the chunk for the hotspot
-                    let sample_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
-                    let sample_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
-                    let hotspot =
-                        ((sample_x * freq + seed).sin() + (sample_z * freq + seed).cos()) > 0.4;
+                    if cow_spawn_chance {
+                        let mut rng_cow = rand::thread_rng();
+                        // 20% chance to spawn 1-2 cows in any chunk within a cow cluster area
+                        if rand::Rng::gen_bool(&mut rng_cow, 0.20) {
+                            for _ in 0..rand::Rng::gen_range(&mut rng_cow, 1..3) {
+                                let ox = rand::Rng::gen_range(&mut rng_cow, 0.0..CHUNK_SIZE as f32);
 
-                    if hotspot {
-                        // Spawn a group of cows
-                        for _ in 0..rand::Rng::gen_range(&mut rng, 5..12) {
-                            let ox = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
-                            let oz = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
-                            let world_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + ox;
-                            let world_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + oz;
+                                let oz = rand::Rng::gen_range(&mut rng_cow, 0.0..CHUNK_SIZE as f32);
+                                let world_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + ox;
+                                let world_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + oz;
 
-                            // Estimate height (could use generate_chunk but let's keep it simple for now)
-                            let noise_val = perlin.get([
-                                world_x as f64 * frequency as f64,
-                                world_z as f64 * frequency as f64,
-                            ]);
-                            let height = (base_height + noise_val as f32 * amplitude).round();
+                                let noise_val = perlin.get([
+                                    world_x as f64 * frequency as f64,
+                                    world_z as f64 * frequency as f64,
+                                ]);
+                                let height = (base_height + noise_val as f32 * amplitude).round();
 
-                            crate::mob::systems::spawn_mob_typed(
-                                &mut commands,
-                                &mut meshes,
-                                &mut materials,
-                                Vec3::new(world_x, height + 1.0, world_z),
-                                crate::mob::components::MobType::Cow,
-                            );
+                                crate::mob::systems::spawn_mob_typed(
+                                    &mut commands,
+                                    &mut meshes,
+                                    &mut materials,
+                                    Vec3::new(world_x, height + 1.0, world_z),
+                                    crate::mob::components::MobType::Cow,
+                                );
+                            }
                         }
                     }
 
@@ -237,7 +250,7 @@ pub fn update_chunk_mesh(
         if processed >= limit {
             break;
         }
-        log::info!("Updating mesh for chunk entity: {:?}", entity);
+        // log::info!("Updating mesh for chunk entity: {:?}", entity);
 
         #[derive(Default)]
         struct MeshBuffers {
@@ -1021,24 +1034,35 @@ pub fn setup_world(
 
                 // Check for cows in initial chunks
                 let mut rng = rand::thread_rng();
-                let freq = 0.05;
                 let seed = world_settings.seed as f32;
+
+                // Sample the center of the chunk for the hotspot
                 let sample_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
                 let sample_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + CHUNK_SIZE as f32 / 2.0;
-                let hotspot =
-                    ((sample_x * freq + seed).sin() + (sample_z * freq + seed).cos()) > 0.4;
 
-                if hotspot {
-                    for _ in 0..rand::Rng::gen_range(&mut rng, 5..12) {
+                // Use a much smaller frequency (0.005) for 100-300 block spacing
+                let cow_freq = 0.005;
+                let hotspot = ((sample_x * cow_freq + seed % 1000.0).sin()
+                    + (sample_z * cow_freq + seed % 1000.0).cos())
+                    > 0.95; // Increased threshold for rarity
+
+                if hotspot && y == max_chunk_y {
+                    // Only spawn in top chunks
+                    // Spawn a herd of cows
+                    for _ in 0..rand::Rng::gen_range(&mut rng, 2..6) {
+                        // Reduced herd size
                         let ox = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
                         let oz = rand::Rng::gen_range(&mut rng, 0.0..CHUNK_SIZE as f32);
                         let world_x = chunk_key.x as f32 * CHUNK_SIZE as f32 + ox;
                         let world_z = chunk_key.z as f32 * CHUNK_SIZE as f32 + oz;
+
+                        // Estimate height (could use generate_chunk but let's keep it simple for now)
                         let noise_val = perlin.get([
                             world_x as f64 * frequency as f64,
                             world_z as f64 * frequency as f64,
                         ]);
                         let height = (base_height + noise_val as f32 * amplitude).round();
+
                         crate::mob::systems::spawn_mob_typed(
                             &mut commands,
                             &mut meshes,

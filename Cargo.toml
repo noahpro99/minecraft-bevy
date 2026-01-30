@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+arboard = "3.6.1"
 bevy = { version = "0.18.0" }
 bevy_rapier3d = { git = "https://github.com/Buncys/bevy_rapier", branch = "bevy-0.18.0" }
+clap = "4.5.56"
 home = "0.5.12"
 noise = "0.9.0"
 rand = "0.8.5"
