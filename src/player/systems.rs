@@ -110,51 +110,7 @@ pub fn spawn_player_when_ready(
     spawn_player(commands, world_settings);
 }
 
-type PlayerLookCameraQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Transform, &'static CameraController),
-    (Without<CharacterController>, With<Camera>),
->;
 
-pub fn player_look(
-    mut mouse_motion: MessageReader<MouseMotion>,
-    mut cam_query: PlayerLookCameraQuery,
-    mut player_query: Query<&mut Transform, (With<CharacterController>, Without<Camera>)>,
-    settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
-    command_state: Res<crate::player::inventory_ui::CommandState>,
-) {
-    if command_state.open {
-        return;
-    }
-
-    if let Ok(visibility) = settings_menu.single()
-        && *visibility != Visibility::Hidden
-    {
-        return;
-    }
-
-    let mut delta = Vec2::ZERO;
-    for event in mouse_motion.read() {
-        delta += event.delta;
-    }
-
-    if delta == Vec2::ZERO {
-        return;
-    }
-
-    if let Ok((mut cam_transform, controller)) = cam_query.single_mut()
-        && let Ok(mut player_transform) = player_query.single_mut()
-    {
-        player_transform.rotate_y(-delta.x * controller.sensitivity * 0.01);
-
-        let mut pitch = cam_transform.rotation.to_euler(EulerRot::YXZ).1;
-        pitch -= delta.y * controller.sensitivity * 0.01;
-        pitch = pitch.clamp(-1.54, 1.54);
-
-        cam_transform.rotation = Quat::from_rotation_x(pitch);
-    }
-}
 
 pub fn player_move(
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -261,11 +217,11 @@ pub fn player_move(
             next_velocity.y
         };
 
-        // Ground check using Rapier raycast
+        // Ground check using Rapier raycast from player's feet
         let was_grounded = controller.is_grounded;
-        let ray_pos = transform.translation;
+        let ray_pos = transform.translation + Vec3::new(0.0, -0.9, 0.0); // Feet position (bottom of collider)
         let ray_dir = -Vec3::Y;
-        let max_toi = 1.05;
+        let max_toi = 0.15; // Short distance just to check if there's a block right below
 
         controller.is_grounded = false;
         if let Some((_entity, toi)) = rapier_context.cast_ray(
@@ -273,8 +229,8 @@ pub fn player_move(
             ray_dir,
             max_toi,
             true,
-            QueryFilter::default().exclude_rigid_body(entity),
-        ) && toi < max_toi
+            QueryFilter::default().exclude_rigid_body(entity).exclude_sensors(),
+        )
         {
             controller.is_grounded = true;
         }
@@ -362,7 +318,7 @@ pub fn handle_player_death(
     transform.translation = Vec3::new(0.0, spawn_height(), 0.0);
     velocity.linvel = Vec3::ZERO;
     controller.is_grounded = false;
-    controller.was_grounded = false;
+    controller.is_grounded = false;
     controller.fall_start_y = transform.translation.y;
 }
 
@@ -483,16 +439,15 @@ pub fn player_interact(mut params: InteractionParams, time: Res<Time>) {
         .rapier_context
         .single()
         .expect("No RapierContext found");
+    if let Ok((player_entity, player_transform)) = params.player_query.single()
+        && let Ok((camera_global_transform, _camera)) = params.camera_query.single()
+    {
+        // Ray comes from player's eye level (anchor), NOT camera position
+        let anchor_y_offset = 0.87; // Eye level offset
+        let ray_origin = player_transform.translation() + Vec3::new(0.0, anchor_y_offset, 0.0);
+        let ray_direction = camera_global_transform.forward();
 
-    if let Ok((camera_global_transform, _camera)) = params.camera_query.single() {
-        let ray_origin: Vec3 = camera_global_transform.translation();
-        let ray_direction: Dir3 = camera_global_transform.forward();
-
-        let filter = if let Ok((player_entity, _)) = params.player_query.single() {
-            QueryFilter::default().exclude_rigid_body(player_entity)
-        } else {
-            QueryFilter::default()
-        };
+        let filter = QueryFilter::default().exclude_rigid_body(player_entity);
 
         // Offset ray origin slightly forward to avoid self-collision if filter fails
         let ray_origin = ray_origin + *ray_direction * 0.1;
@@ -1024,5 +979,54 @@ fn resolve_drop_overlap(
         }
 
         transform.translation.y += radius * 2.0;
+    }
+}
+
+
+
+
+type PlayerLookCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static CameraController),
+    (Without<CharacterController>, With<Camera>),
+>;
+
+pub fn player_look(
+    mut mouse_motion: MessageReader<MouseMotion>,
+    mut cam_query: PlayerLookCameraQuery,
+    mut player_query: Query<&mut Transform, (With<CharacterController>, Without<Camera>)>,
+    settings_menu: Query<&Visibility, With<crate::player::settings_menu::SettingsMenu>>,
+    command_state: Res<crate::player::inventory_ui::CommandState>,
+) {
+    if command_state.open {
+        return;
+    }
+
+    if let Ok(visibility) = settings_menu.single()
+        && *visibility != Visibility::Hidden
+    {
+        return;
+    }
+
+    let mut delta = Vec2::ZERO;
+    for event in mouse_motion.read() {
+        delta += event.delta;
+    }
+
+    if delta == Vec2::ZERO {
+        return;
+    }
+
+    if let Ok((mut cam_transform, controller)) = cam_query.single_mut()
+        && let Ok(mut player_transform) = player_query.single_mut()
+    {
+        player_transform.rotate_y(-delta.x * controller.sensitivity * 0.01);
+
+        let mut pitch = cam_transform.rotation.to_euler(EulerRot::YXZ).1;
+        pitch -= delta.y * controller.sensitivity * 0.01;
+        pitch = pitch.clamp(-1.54, 1.54);
+
+        cam_transform.rotation = Quat::from_rotation_x(pitch);
     }
 }

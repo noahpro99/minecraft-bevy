@@ -24,11 +24,11 @@ fn main() {
         .init_asset::<AudioSource>()
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
         .insert_resource(TimestepMode::Interpolated {
-            dt: 1.0 / 20.0,
+            dt: 1.0 / 60.0,
             time_scale: 1.0,
-            substeps: 1,
+            substeps: 8,
         })
-        .insert_resource(Time::<Fixed>::from_hz(20.0))
+        .insert_resource(Time::<Fixed>::from_hz(60.0))
         .add_plugins(MainMenuPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(WorldPlugin)

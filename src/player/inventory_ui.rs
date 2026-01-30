@@ -804,8 +804,21 @@ pub fn handle_command_input(
     mut char_events: MessageReader<KeyboardInput>,
     _mouse: Res<ButtonInput<KeyCode>>,
     mut sun_query: Query<(&mut Transform, &mut DirectionalLight), With<SunLight>>,
-    mut player_query: Query<&mut Transform, (With<crate::player::components::Player>, Without<SunLight>, Without<Mob>)>,
-    mob_query: Query<(&Mob, &Transform), (Without<crate::player::components::Player>, Without<SunLight>)>,
+    mut player_query: Query<
+        &mut Transform,
+        (
+            With<crate::player::components::Player>,
+            Without<SunLight>,
+            Without<Mob>,
+        ),
+    >,
+    mob_query: Query<
+        (&Mob, &Transform),
+        (
+            Without<crate::player::components::Player>,
+            Without<SunLight>,
+        ),
+    >,
     mut kill_events: MessageWriter<KillEvent>,
 ) {
     if let Ok(visibility) = visibility_params.p0().single()
@@ -836,7 +849,13 @@ pub fn handle_command_input(
         if let Ok(mut visibility) = visibility_params.p1().single_mut() {
             *visibility = Visibility::Hidden;
         }
-        let response = execute_command(&command, &mut sun_query, &mut player_query, &mob_query, &mut kill_events);
+        let response = execute_command(
+            &command,
+            &mut sun_query,
+            &mut player_query,
+            &mob_query,
+            &mut kill_events,
+        );
         if !response.is_empty() {
             let sys_msg = format!("[System] {}", response);
             println!("{}", sys_msg);
@@ -845,7 +864,10 @@ pub fn handle_command_input(
     }
 
     // Handle Paste (Ctrl+V)
-    if (keyboard_input.pressed(KeyCode::ControlLeft) || keyboard_input.pressed(KeyCode::ControlRight) || keyboard_input.pressed(KeyCode::SuperLeft) || keyboard_input.pressed(KeyCode::SuperRight))
+    if (keyboard_input.pressed(KeyCode::ControlLeft)
+        || keyboard_input.pressed(KeyCode::ControlRight)
+        || keyboard_input.pressed(KeyCode::SuperLeft)
+        || keyboard_input.pressed(KeyCode::SuperRight))
         && keyboard_input.just_pressed(KeyCode::KeyV)
     {
         use std::process::Command;
@@ -864,18 +886,16 @@ pub fn handle_command_input(
                 // Fallback to arboard if wl-paste isn't working/available
                 use arboard::Clipboard;
                 match Clipboard::new() {
-                    Ok(mut clipboard) => {
-                        match clipboard.get_text() {
-                            Ok(text) => {
-                                command_state.buffer.push_str(&text);
-                            }
-                            Err(e) => {
-                                let msg = format!("[System] Clipboard Error: {}", e);
-                                println!("{}", msg);
-                                command_state.history.push(msg);
-                            }
+                    Ok(mut clipboard) => match clipboard.get_text() {
+                        Ok(text) => {
+                            command_state.buffer.push_str(&text);
                         }
-                    }
+                        Err(e) => {
+                            let msg = format!("[System] Clipboard Error: {}", e);
+                            println!("{}", msg);
+                            command_state.history.push(msg);
+                        }
+                    },
                     Err(e) => {
                         let msg = format!("[System] Clipboard Init Error: {}", e);
                         println!("{}", msg);
@@ -890,9 +910,12 @@ pub fn handle_command_input(
         if !event.state.is_pressed() {
             continue;
         }
-        
+
         // Skip paste event to avoid double input if V is also handled by char_events
-        if (keyboard_input.pressed(KeyCode::ControlLeft) || keyboard_input.pressed(KeyCode::ControlRight) || keyboard_input.pressed(KeyCode::SuperLeft) || keyboard_input.pressed(KeyCode::SuperRight))
+        if (keyboard_input.pressed(KeyCode::ControlLeft)
+            || keyboard_input.pressed(KeyCode::ControlRight)
+            || keyboard_input.pressed(KeyCode::SuperLeft)
+            || keyboard_input.pressed(KeyCode::SuperRight))
             && event.key_code == KeyCode::KeyV
         {
             continue;
@@ -926,8 +949,21 @@ fn execute_command(
         (&mut Transform, &mut DirectionalLight),
         With<crate::world::components::SunLight>,
     >,
-    player_query: &mut Query<&mut Transform, (With<crate::player::components::Player>, Without<crate::world::components::SunLight>, Without<Mob>)>,
-    mob_query: &Query<(&Mob, &Transform), (Without<crate::player::components::Player>, Without<crate::world::components::SunLight>)>,
+    player_query: &mut Query<
+        &mut Transform,
+        (
+            With<crate::player::components::Player>,
+            Without<crate::world::components::SunLight>,
+            Without<Mob>,
+        ),
+    >,
+    mob_query: &Query<
+        (&Mob, &Transform),
+        (
+            Without<crate::player::components::Player>,
+            Without<crate::world::components::SunLight>,
+        ),
+    >,
     kill_events: &mut MessageWriter<KillEvent>,
 ) -> String {
     let input = buffer.trim();
@@ -949,19 +985,16 @@ fn execute_command(
         .subcommand(
             Command::new("time")
                 .arg(Arg::new("action").required(true))
-                .arg(Arg::new("value").required(true))
+                .arg(Arg::new("value").required(true)),
         )
         .subcommand(
             Command::new("tp")
                 .arg(Arg::new("arg1").required(true))
                 .arg(Arg::new("arg2").required(false))
                 .arg(Arg::new("arg3").required(false))
-                .arg(Arg::new("arg4").required(false))
+                .arg(Arg::new("arg4").required(false)),
         )
-        .subcommand(
-            Command::new("kill")
-                .arg(Arg::new("target").required(true))
-        );
+        .subcommand(Command::new("kill").arg(Arg::new("target").required(true)));
 
     let matches = match app.try_get_matches_from(cmd_text.split_whitespace()) {
         Ok(m) => m,
@@ -976,19 +1009,21 @@ fn execute_command(
         Some(("time", sub_m)) => {
             let action = sub_m.get_one::<String>("action").unwrap();
             let value = sub_m.get_one::<String>("value").unwrap();
-            
+
             if action == "set" {
                 match value.as_str() {
                     "day" => {
                         if let Ok((mut transform, mut light)) = sun_query.single_mut() {
-                            *transform = Transform::from_xyz(80.0, 120.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y);
+                            *transform = Transform::from_xyz(80.0, 120.0, 40.0)
+                                .looking_at(Vec3::ZERO, Vec3::Y);
                             light.illuminance = 30000.0;
                         }
                         return "Set time: day".to_string();
                     }
                     "night" => {
                         if let Ok((mut transform, mut light)) = sun_query.single_mut() {
-                            *transform = Transform::from_xyz(-30.0, -10.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y);
+                            *transform = Transform::from_xyz(-30.0, -10.0, 0.0)
+                                .looking_at(Vec3::ZERO, Vec3::Y);
                             light.illuminance = 2000.0;
                         }
                         return "Set time: night".to_string();
@@ -1013,46 +1048,70 @@ fn execute_command(
 
                 let parse_f = |s: &String| s.parse::<f32>().ok();
 
-                let (target_selector, dest_x, dest_y, dest_z, is_coord_tp) = if let (Some(x_s), Some(y_s), Some(z_s)) = (parse_f(arg1), arg2.and_then(parse_f), arg3.and_then(parse_f)) {
-                    // /tp <x> <y> <z>
-                    ("@p", Some(x_s), Some(y_s), Some(z_s), true)
-                } else if let (Some(x_s), Some(y_s), Some(z_s)) = (arg2.and_then(parse_f), arg3.and_then(parse_f), arg4.and_then(parse_f)) {
-                    // /tp <who> <x> <y> <z>
-                    (arg1.as_str(), Some(x_s), Some(y_s), Some(z_s), true)
-                } else if let Some(_dest) = arg2 {
-                    // /tp <who> <destination>
-                    (arg1.as_str(), None, None, None, false)
-                } else {
-                    // /tp <destination>
-                    ("@p", None, None, None, false)
-                };
+                let (target_selector, dest_x, dest_y, dest_z, is_coord_tp) =
+                    if let (Some(x_s), Some(y_s), Some(z_s)) = (
+                        parse_f(arg1),
+                        arg2.and_then(parse_f),
+                        arg3.and_then(parse_f),
+                    ) {
+                        // /tp <x> <y> <z>
+                        ("@p", Some(x_s), Some(y_s), Some(z_s), true)
+                    } else if let (Some(x_s), Some(y_s), Some(z_s)) = (
+                        arg2.and_then(parse_f),
+                        arg3.and_then(parse_f),
+                        arg4.and_then(parse_f),
+                    ) {
+                        // /tp <who> <x> <y> <z>
+                        (arg1.as_str(), Some(x_s), Some(y_s), Some(z_s), true)
+                    } else if let Some(_dest) = arg2 {
+                        // /tp <who> <destination>
+                        (arg1.as_str(), None, None, None, false)
+                    } else {
+                        // /tp <destination>
+                        ("@p", None, None, None, false)
+                    };
 
                 // Destination resolution
                 let destination = if is_coord_tp {
                     Some(Vec3::new(dest_x.unwrap(), dest_y.unwrap(), dest_z.unwrap()))
                 } else {
-                    let dest_str = if arg2.is_some() { arg2.unwrap().as_str() } else { arg1.as_str() };
-                    
+                    let dest_str = if arg2.is_some() {
+                        arg2.unwrap().as_str()
+                    } else {
+                        arg1.as_str()
+                    };
+
                     if dest_str.starts_with("@e") {
                         let player_pos = player_transform.translation;
-                        let target_type = if dest_str.contains("type=cow") { Some(crate::mob::components::MobType::Cow) }
-                                         else if dest_str.contains("type=slime") { Some(crate::mob::components::MobType::Slime) }
-                                         else { None };
+                        let target_type = if dest_str.contains("type=cow") {
+                            Some(crate::mob::components::MobType::Cow)
+                        } else if dest_str.contains("type=slime") {
+                            Some(crate::mob::components::MobType::Slime)
+                        } else {
+                            None
+                        };
 
-                        let mut candidates: Vec<Vec3> = mob_query.iter()
-                            .filter(|(mob, _)| target_type.is_none() || mob.mob_type == target_type.unwrap())
+                        let mut candidates: Vec<Vec3> = mob_query
+                            .iter()
+                            .filter(|(mob, _)| {
+                                target_type.is_none() || mob.mob_type == target_type.unwrap()
+                            })
                             .map(|(_, t)| t.translation)
                             .collect();
 
                         let count = candidates.len();
                         if count == 0 {
                             let all_mobs = mob_query.iter().count();
-                            return format!("No entities found matching selector. (Total mobs in world: {})", all_mobs);
+                            return format!(
+                                "No entities found matching selector. (Total mobs in world: {})",
+                                all_mobs
+                            );
                         }
 
                         if dest_str.contains("sort=nearest") || !dest_str.contains("sort=") {
                             candidates.sort_by(|a, b| {
-                                player_pos.distance_squared(*a)
+                                player_pos
+                                    .distance_squared(*a)
                                     .partial_cmp(&player_pos.distance_squared(*b))
                                     .unwrap()
                             });
@@ -1062,7 +1121,7 @@ fn execute_command(
                     } else if dest_str == "@p" || dest_str == "@s" {
                         Some(player_transform.translation)
                     } else {
-                        // Attempt to parse destination as x y z if possible, 
+                        // Attempt to parse destination as x y z if possible,
                         // though Case 1/2 should have handled it.
                         None
                     }
@@ -1070,15 +1129,27 @@ fn execute_command(
 
                 if let Some(pos) = destination {
                     // For now we only support teleporting the player (@p or implicitly)
-                    if target_selector == "@p" || target_selector == "@s" || target_selector == "@a" {
-                         player_transform.translation = pos + if !is_coord_tp { Vec3::Y * 1.5 } else { Vec3::ZERO };
-                         return format!("Teleported player to {:?}", pos);
+                    if target_selector == "@p" || target_selector == "@s" || target_selector == "@a"
+                    {
+                        player_transform.translation = pos
+                            + if !is_coord_tp {
+                                Vec3::Y * 1.5
+                            } else {
+                                Vec3::ZERO
+                            };
+                        return format!("Teleported player to {:?}", pos);
                     } else {
-                        return format!("Teleporting entities other than @p is not yet implemented. Target: {}", target_selector);
+                        return format!(
+                            "Teleporting entities other than @p is not yet implemented. Target: {}",
+                            target_selector
+                        );
                     }
                 }
 
-                format!("Could not figure out destination for: '{}'. (Usage: /tp [who] <x y z | destination>)", if arg2.is_some() { arg2.unwrap() } else { arg1 })
+                format!(
+                    "Could not figure out destination for: '{}'. (Usage: /tp [who] <x y z | destination>)",
+                    if arg2.is_some() { arg2.unwrap() } else { arg1 }
+                )
             } else {
                 "Player not found".to_string()
             }

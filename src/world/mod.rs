@@ -4,7 +4,7 @@ pub mod components;
 pub mod resources;
 pub mod systems;
 
-use resources::VoxelWorld;
+use resources::{ChunkLoadFrameCounter, VoxelWorld};
 use systems::{
     apply_chunk_despawns, despawn_far_chunks, reset_voxel_world, setup_world,
     spawn_chunks_around_player, update_chunk_mesh, update_game_time,
@@ -16,6 +16,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<VoxelWorld>()
             .init_resource::<crate::world::components::GameTime>()
+            .init_resource::<ChunkLoadFrameCounter>()
             .add_systems(
                 OnEnter(crate::main_menu::AppState::InGame),
                 (reset_voxel_world, setup_world).chain(),

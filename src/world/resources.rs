@@ -7,6 +7,17 @@ pub struct VoxelWorld {
     pub chunks: HashMap<IVec3, Entity>,
 }
 
+#[derive(Resource)]
+pub struct ChunkLoadFrameCounter {
+    pub frame: u32,
+}
+
+impl Default for ChunkLoadFrameCounter {
+    fn default() -> Self {
+        Self { frame: 0 }
+    }
+}
+
 impl VoxelWorld {
     pub fn world_to_chunk_pos(world_pos: Vec3) -> IVec3 {
         (world_pos / CHUNK_SIZE as f32).floor().as_ivec3()

@@ -8,10 +8,10 @@ use noise::{NoiseFn, Perlin};
 
 use crate::main_menu::WorldSettings;
 use crate::player::settings_menu::Settings;
-use crate::world::components::{
-    Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType, CHUNK_SIZE,
-};
 use crate::world::VoxelWorld;
+use crate::world::components::{
+    CHUNK_SIZE, Chunk, ChunkPosition, DespawnChunk, NeedsMeshUpdate, SunLight, VoxelType,
+};
 
 #[derive(Component)]
 #[allow(dead_code)]
@@ -37,8 +37,9 @@ pub struct BlockAssets {
 #[derive(Resource, Default)]
 pub struct InitialChunkMeshing(pub bool);
 
-const MAX_CHUNKS_PER_FRAME: usize = usize::MAX;
-const MAX_MESH_UPDATES_PER_FRAME: usize = usize::MAX;
+const MAX_CHUNKS_PER_FRAME: usize = 1;
+const MAX_MESH_UPDATES_PER_FRAME: usize = 8;
+const CHUNK_LOAD_SKIP_FRAMES: u32 = 3; // Only load 1 chunk every 3 frames
 const WORLD_MIN_Y: i32 = -32;
 const WORLD_MAX_Y: i32 = 96;
 
@@ -47,6 +48,7 @@ pub fn spawn_chunks_around_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut voxel_world: ResMut<VoxelWorld>,
+    mut frame_counter: ResMut<crate::world::resources::ChunkLoadFrameCounter>,
     player_query: Query<&Transform, With<crate::player::components::Player>>,
     settings: Res<Settings>,
     initial_meshing: Res<InitialChunkMeshing>,
@@ -56,6 +58,12 @@ pub fn spawn_chunks_around_player(
         Some(t) => t,
         None => return,
     };
+
+    // Skip chunk loading on some frames to reduce lag
+    frame_counter.frame += 1;
+    if frame_counter.frame % CHUNK_LOAD_SKIP_FRAMES != 0 {
+        return;
+    }
 
     let player_chunk_pos = VoxelWorld::world_to_chunk_pos(player_transform.translation);
     let view_distance = settings.render_distance;
@@ -607,12 +615,23 @@ pub fn update_chunk_mesh(
             continue;
         }
 
-        let collider_mesh = combined.into_mesh();
-        let collider = Collider::from_bevy_mesh(
-            &collider_mesh,
-            &ComputedColliderShape::TriMesh(TriMeshFlags::default()),
-        )
-        .unwrap();
+        // Use voxel grid collider for perfect block alignment (no edge catching!)
+        let mut solid_voxels = Vec::new();
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for z in 0..CHUNK_SIZE {
+                    let voxel = chunk.get_voxel(IVec3::new(x as i32, y as i32, z as i32));
+                    if voxel != VoxelType::Air && voxel != VoxelType::TallGrass {
+                        solid_voxels.push(IVec3::new(x as i32, y as i32, z as i32));
+                    }
+                }
+            }
+        }
+        let collider = if solid_voxels.is_empty() {
+            return;
+        } else {
+            Collider::voxels(Vec3::ONE, &solid_voxels)
+        };
         if let Ok(mut entity_commands) = commands.get_entity(entity) {
             entity_commands.insert((collider, Visibility::Visible));
 

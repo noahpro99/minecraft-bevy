@@ -4,7 +4,7 @@ use crate::player::inventory_ui::KillEvent;
 use crate::world::components::{GameTime, InGameEntity};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 fn get_terrain_height(x: f32, z: f32) -> f32 {
     let base_height = 14.0;
@@ -102,7 +102,13 @@ pub fn mob_spawner_system(
 
             if is_night {
                 if rng.gen_bool(0.9) {
-                    spawn_mob_typed(&mut commands, &mut meshes, &mut materials, position, MobType::Slime);
+                    spawn_mob_typed(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        position,
+                        MobType::Slime,
+                    );
                 }
             }
             // Cows no longer spawn via timer system, only on chunk generation.
@@ -125,11 +131,12 @@ pub fn mob_behavior_system(
     mut player_query: Query<(Entity, &Transform, &mut Health), With<Player>>,
 ) {
     let mut rng = thread_rng();
-    let (player_entity, player_transform, mut player_health) = if let Ok(p) = player_query.single_mut() {
-        p
-    } else {
-        return;
-    };
+    let (player_entity, player_transform, mut player_health) =
+        if let Ok(p) = player_query.single_mut() {
+            p
+        } else {
+            return;
+        };
 
     let love_mobs: Vec<(Entity, Vec3)> = mob_query
         .iter()
@@ -148,8 +155,8 @@ pub fn mob_behavior_system(
             MobBehavior::Idle => {
                 if state.timer <= 0.0 {
                     // Check if player is close for slimes to attack
-                    if matches!(mob.mob_type, MobType::Slime) 
-                        && transform.translation.distance(player_transform.translation) < 10.0 
+                    if matches!(mob.mob_type, MobType::Slime)
+                        && transform.translation.distance(player_transform.translation) < 10.0
                     {
                         state.state = MobBehavior::Attacking;
                         state.target_entity = Some(player_entity);
@@ -171,7 +178,7 @@ pub fn mob_behavior_system(
             }
             MobBehavior::Attacking => {
                 mob.attack_cooldown -= time.delta_secs();
-                
+
                 let dist = transform.translation.distance(player_transform.translation);
 
                 // If target is player and player is far, stop attacking
@@ -182,10 +189,10 @@ pub fn mob_behavior_system(
                 }
 
                 // Deal damage if close enough
-                if matches!(mob.mob_type, MobType::Slime) 
+                if matches!(mob.mob_type, MobType::Slime)
                     && state.target_entity == Some(player_entity)
                     && dist < 1.2
-                    && mob.attack_cooldown <= 0.0 
+                    && mob.attack_cooldown <= 0.0
                 {
                     player_health.current = player_health.current.saturating_sub(1);
                     mob.attack_cooldown = 1.0; // 1 second cooldown
@@ -268,7 +275,13 @@ pub fn mob_behavior_system(
     }
 
     for pos in to_spawn {
-        spawn_mob_typed(&mut commands, &mut meshes, &mut materials, pos, MobType::Cow);
+        spawn_mob_typed(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            pos,
+            MobType::Cow,
+        );
     }
 }
 
@@ -284,9 +297,8 @@ pub fn mob_movement_system(
     let player_transform = player_data.map(|(_, t)| t);
     let despawn_dist = (settings.render_distance as f32 + 4.0) * 16.0;
     let despawn_dist_sq = despawn_dist * despawn_dist;
-    
-    let rapier_context = rapier_context.single().unwrap();
 
+    let rapier_context = rapier_context.single().unwrap();
 
     let mob_transforms: Vec<(Entity, Vec3)> = mob_query
         .iter()
@@ -312,7 +324,10 @@ pub fn mob_movement_system(
                 player_transform.map(|t| t.translation)
             } else {
                 // Check if target is another mob
-                mob_transforms.iter().find(|(e, _)| *e == target_entity).map(|(_, p)| *p)
+                mob_transforms
+                    .iter()
+                    .find(|(e, _)| *e == target_entity)
+                    .map(|(_, p)| *p)
             };
 
             if let Some(pos) = target_pos {
@@ -335,9 +350,13 @@ pub fn mob_movement_system(
             let ray_pos = transform.translation + Vec3::Y * 0.1;
             let ray_dir = move_dir;
             let max_toi = 1.0;
-            
+
             if let Some((_hit_entity, _toi)) = rapier_context.cast_ray(
-                ray_pos, ray_dir, max_toi, true, QueryFilter::new().exclude_collider(entity)
+                ray_pos,
+                ray_dir,
+                max_toi,
+                true,
+                QueryFilter::new().exclude_collider(entity),
             ) {
                 // Obstacle detected, check if we're grounded before jumping
                 if velocity.linvel.y.abs() < 0.1 {
@@ -347,7 +366,11 @@ pub fn mob_movement_system(
                 // Also check a bit higher up to see if it's a 1-block wall
                 let ray_pos_high = transform.translation + Vec3::Y * 0.6;
                 if let Some((_hit_entity, _toi)) = rapier_context.cast_ray(
-                    ray_pos_high, ray_dir, max_toi, true, QueryFilter::new().exclude_collider(entity)
+                    ray_pos_high,
+                    ray_dir,
+                    max_toi,
+                    true,
+                    QueryFilter::new().exclude_collider(entity),
                 ) {
                     if velocity.linvel.y.abs() < 0.1 {
                         should_jump = true;
@@ -375,7 +398,7 @@ pub fn handle_kill_events(
 
     for event in kill_events.read() {
         let selector = &event.selector;
-        
+
         let target_type = if selector.contains("type=cow") {
             Some(MobType::Cow)
         } else if selector.contains("type=slime") {
@@ -394,7 +417,9 @@ pub fn handle_kill_events(
 
         let distance = if let Some(pos) = selector.find("distance=") {
             let rest = &selector[pos + 9..];
-            let end = rest.find(|c: char| !c.is_numeric() && c != '.').unwrap_or(rest.len());
+            let end = rest
+                .find(|c: char| !c.is_numeric() && c != '.')
+                .unwrap_or(rest.len());
             rest[..end].parse::<f32>().ok()
         } else {
             None
@@ -412,7 +437,9 @@ pub fn handle_kill_events(
                 type_match && dist_match
             })
             .map(|(e, _, t)| {
-                let d = player_transform.map(|pt| t.translation.distance_squared(pt.translation)).unwrap_or(0.0);
+                let d = player_transform
+                    .map(|pt| t.translation.distance_squared(pt.translation))
+                    .unwrap_or(0.0);
                 (e, d)
             })
             .collect();
@@ -423,7 +450,11 @@ pub fn handle_kill_events(
         }
 
         let to_kill = if let Some(l) = limit {
-            targets.into_iter().take(l).map(|(e, _)| e).collect::<Vec<_>>()
+            targets
+                .into_iter()
+                .take(l)
+                .map(|(e, _)| e)
+                .collect::<Vec<_>>()
         } else {
             targets.into_iter().map(|(e, _)| e).collect::<Vec<_>>()
         };
@@ -432,7 +463,7 @@ pub fn handle_kill_events(
         for entity in to_kill {
             commands.entity(entity).despawn();
         }
-        
+
         if count > 0 {
             println!("[System] Killed {} entities matching {}", count, selector);
         } else {
